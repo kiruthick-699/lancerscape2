@@ -1,36 +1,36 @@
-# 🚀 Lancerscape2 - Blockchain-Powered Job Marketplace
+# Lancerscape2 - Blockchain-Powered Job Marketplace
 
 A full-stack, decentralized job marketplace built with React Native, Node.js, and Ethereum smart contracts.
 
-## 🌟 Features
+#Features
 
-### 🔐 Authentication & Security
+# Authentication & Security
 - **Complete Authentication System** - Login, registration, email verification
 - **Two-Factor Authentication** - Enhanced security with 2FA support
 - **JWT Token Management** - Secure session handling with refresh tokens
 - **Rate Limiting** - Protection against brute force attacks
 - **Input Validation** - Comprehensive client and server-side validation
 
-### 💼 Job Management
+# Job Management
 - **Job Posting** - Create and manage job listings
 - **Proposal System** - Submit and manage job proposals
 - **Escrow Payments** - Secure payment escrow with dispute resolution
 - **Reputation System** - User reputation and NFT badges
 - **Real-time Chat** - Built-in messaging system
 
-### 🔗 Blockchain Integration
+# Blockchain Integration
 - **MetaMask Integration** - Seamless wallet connection
 - **Smart Contracts** - JobPosting, Escrow, and Reputation contracts
 - **Web3 Service** - Complete blockchain interaction layer
 - **Transaction Management** - Secure blockchain transactions
 
-### 🎨 Modern UI/UX
+# Modern UI/UX
 - **React Native with Expo** - Cross-platform mobile app
 - **Dark/Light Themes** - Customizable theme system
 - **Responsive Design** - Beautiful, modern interface
 - **Real-time Updates** - Live data synchronization
 
-## 🏗️ Architecture
+# Architecture
 
 ```
 lancerscape2/
@@ -54,9 +54,9 @@ lancerscape2/
 └── types/                 # TypeScript type definitions
 ```
 
-## 🚀 Quick Start
+# Quick Start
 
-### Prerequisites
+# Prerequisites
 - Node.js 18+ 
 - npm or yarn
 - Expo CLI
@@ -64,7 +64,7 @@ lancerscape2/
 - PostgreSQL database
 - Redis server
 
-### Installation
+# Installation
 
 1. **Clone the repository**
    ```bash
@@ -108,16 +108,16 @@ lancerscape2/
    npx expo start
    ```
 
-## 📚 Documentation
+# Documentation
 
 - **[SETUP.md](SETUP.md)** - Complete setup guide
 - **[DEPLOYMENT.md](DEPLOYMENT.md)** - Smart contract deployment
 - **[SECURITY.md](SECURITY.md)** - Security implementation details
 - **[README-BLOCKCHAIN.md](README-BLOCKCHAIN.md)** - Blockchain features
 
-## 🔒 Security Features
+# Security Features
 
-### Smart Contract Security
+# Smart Contract Security
 - ✅ Reentrancy protection
 - ✅ Access controls and authorization
 - ✅ Input validation and sanitization
@@ -126,7 +126,7 @@ lancerscape2/
 - ✅ Timelock mechanisms
 - ✅ Dispute resolution system
 
-### Application Security
+# Application Security
 - ✅ JWT token management
 - ✅ Password hashing (bcrypt)
 - ✅ Rate limiting and throttling
@@ -135,16 +135,16 @@ lancerscape2/
 - ✅ XSS and SQL injection prevention
 - ✅ Secure environment configuration
 
-## 🛠️ Tech Stack
+# Tech Stack
 
-### Frontend
+# Frontend
 - **React Native** - Cross-platform mobile development
 - **Expo** - Development platform and tools
 - **TypeScript** - Type-safe JavaScript
 - **Ethers.js** - Ethereum blockchain interaction
 - **React Context** - State management
 
-### Backend
+# Backend
 - **Node.js** - JavaScript runtime
 - **Express.js** - Web application framework
 - **PostgreSQL** - Primary database
@@ -152,41 +152,41 @@ lancerscape2/
 - **Objection.js** - SQL query builder
 - **JWT** - Authentication tokens
 
-### Blockchain
+# Blockchain
 - **Solidity** - Smart contract language
 - **Hardhat** - Development framework
 - **OpenZeppelin** - Secure contract libraries
 - **Ethereum** - Blockchain platform
 
-### DevOps
+# DevOps
 - **Docker** - Containerization
 - **GitHub Actions** - CI/CD (ready to configure)
 - **Environment Variables** - Secure configuration
 
-## 🎯 Key Features
+# Key Features
 
-### For Job Seekers
+# For Job Seekers
 - Browse and search job listings
 - Submit proposals with cover letters
 - Track application status
 - Receive payments through escrow
 - Build reputation and earn badges
 
-### For Job Posters
+# For Job Posters
 - Post detailed job listings
 - Review and accept proposals
 - Manage project timelines
 - Release payments securely
 - Rate freelancers
 
-### For Platform
+# For Platform
 - Secure payment processing
 - Dispute resolution system
 - Reputation management
 - Real-time notifications
 - Analytics and reporting
 
-## 🔄 Development Workflow
+# Development Workflow
 
 1. **Feature Development**
    ```bash
@@ -222,7 +222,7 @@ lancerscape2/
 - ✅ **Security** - 100% Complete
 - ✅ **Documentation** - 100% Complete
 
-## 🤝 Contributing
+# Contributing
 
 1. Fork the repository
 2. Create a feature branch
@@ -230,18 +230,18 @@ lancerscape2/
 4. Add tests if applicable
 5. Submit a pull request
 
-## 📄 License
+# License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🆘 Support
+# Support
 
 For support and questions:
 - Check the [documentation](SETUP.md)
 - Review [security guidelines](SECURITY.md)
 - Open an issue on GitHub
 
-## 🎉 Acknowledgments
+# Acknowledgments
 
 - OpenZeppelin for secure smart contract libraries
 - Expo team for the amazing development platform
@@ -249,4 +249,4 @@ For support and questions:
 
 ---
 
-**Built with ❤️ for the future of work** 
+ 
