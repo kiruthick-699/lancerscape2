@@ -10,51 +10,21 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Linking
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Eye, EyeOff, Mail, Lock, Smartphone, ArrowLeft, Shield, CheckCircle } from 'lucide-react-native';
+import { Eye, EyeOff, Mail, Lock, AlertCircle } from 'lucide-react-native';
 import { useTheme } from '@/contexts/ThemeContext';
-import { useWallet } from '@/contexts/WalletContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { router } from 'expo-router';
 
-interface LoginFormData {
-  email: string;
-  password: string;
-  twoFactorCode: string;
-}
-
-interface AuthResponse {
-  user: {
-    id: string;
-    email: string;
-    username: string;
-    firstName: string;
-    lastName: string;
-    userType: 'client' | 'freelancer';
-    isVerified: boolean;
-    emailVerified: boolean;
-    twoFactorEnabled: boolean;
-  };
-  tokens: {
-    accessToken: string;
-    refreshToken: string;
-    expiresIn: number;
-  };
-  message?: string;
-}
-
-export default function LoginScreen({ navigation }: any) {
+export default function LoginScreen() {
   const { colors } = useTheme();
-  const { isConnected, walletAddress } = useWallet();
-  const [isLoading, setIsLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [showTwoFactor, setShowTwoFactor] = useState(false);
-  const [isVerifying, setIsVerifying] = useState(false);
-  const [formData, setFormData] = useState<LoginFormData>({
+  const { login, isLoading } = useAuth();
+  const [formData, setFormData] = useState({
     email: '',
     password: '',
-    twoFactorCode: ''
   });
+  const [showPassword, setShowPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleLogin = async () => {
     if (!formData.email || !formData.password) {
@@ -63,168 +33,47 @@ export default function LoginScreen({ navigation }: any) {
     }
 
     try {
-      setIsLoading(true);
-
-      // First, attempt to login
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/auth/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: formData.email,
-          password: formData.password,
-        }),
-      });
-
-      const data: AuthResponse = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Login failed');
-      }
-
-      // Check if 2FA is required
-      if (data.user.twoFactorEnabled && !formData.twoFactorCode) {
-        setShowTwoFactor(true);
-        setIsLoading(false);
-        return;
-      }
-
-      // If 2FA is required and code is provided, verify it
-      if (data.user.twoFactorEnabled && formData.twoFactorCode) {
-        await verifyTwoFactor(data.tokens.accessToken);
-        return;
-      }
-
-      // Store tokens securely
-      await storeTokens(data.tokens);
-      
-      // Navigate to main app
-      navigation.replace('(tabs)');
-      
+      setIsSubmitting(true);
+      await login(formData.email, formData.password);
+      // Navigation will be handled by AuthContext
     } catch (error) {
-      console.error('Login failed:', error);
+      // Error handling is done in AuthContext
+      // Just show a generic message here
       Alert.alert(
         'Login Failed',
-        error instanceof Error ? error.message : 'An error occurred during login. Please try again.'
+        'Invalid email or password. Please try again.'
       );
     } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const verifyTwoFactor = async (accessToken: string) => {
-    try {
-      setIsVerifying(true);
-
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/auth/verify-2fa`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
-          code: formData.twoFactorCode,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || '2FA verification failed');
-      }
-
-      // Store tokens securely
-      await storeTokens(data.tokens);
-      
-      // Navigate to main app
-      navigation.replace('(tabs)');
-      
-    } catch (error) {
-      console.error('2FA verification failed:', error);
-      Alert.alert(
-        'Verification Failed',
-        error instanceof Error ? error.message : 'Invalid 2FA code. Please try again.'
-      );
-    } finally {
-      setIsVerifying(false);
-    }
-  };
-
-  const storeTokens = async (tokens: AuthResponse['tokens']) => {
-    // In a real app, use secure storage like expo-secure-store
-    // For now, we'll use AsyncStorage (not recommended for production)
-    try {
-      // Store tokens securely
-      // await SecureStore.setItemAsync('accessToken', tokens.accessToken);
-      // await SecureStore.setItemAsync('refreshToken', tokens.refreshToken);
-      
-      // For demo purposes, we'll use a simple approach
-      console.log('Tokens stored successfully');
-    } catch (error) {
-      console.error('Failed to store tokens:', error);
+      setIsSubmitting(false);
     }
   };
 
   const handleForgotPassword = () => {
-    navigation.navigate('forgot-password');
+    // Navigate to forgot password screen
+    Alert.alert('Forgot Password', 'Please contact support to reset your password.');
   };
 
   const handleRegister = () => {
-    navigation.navigate('register');
-  };
-
-  const handleEmailVerification = () => {
-    Alert.alert(
-      'Email Verification Required',
-      'Please check your email and click the verification link to activate your account.',
-      [
-        { text: 'OK' },
-        { text: 'Resend Email', onPress: () => resendVerificationEmail() }
-      ]
-    );
-  };
-
-  const resendVerificationEmail = async () => {
-    try {
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/auth/resend-verification`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: formData.email,
-        }),
-      });
-
-      if (response.ok) {
-        Alert.alert('Success', 'Verification email has been sent to your inbox.');
-      } else {
-        throw new Error('Failed to send verification email');
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to send verification email. Please try again.');
-    }
+    router.push('/register');
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardAvoidingView}
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={styles.keyboardAvoidingView}
+    >
+      <ScrollView
+        contentContainerStyle={styles.scrollContainer}
+        keyboardShouldPersistTaps="handled"
       >
-        <ScrollView contentContainerStyle={styles.scrollContent}>
+        <View style={styles.container}>
           {/* Header */}
           <View style={styles.header}>
-            <TouchableOpacity
-              onPress={() => navigation.goBack()}
-              style={styles.backButton}
-            >
-              <ArrowLeft size={24} color={colors.text} />
-            </TouchableOpacity>
-            <Text style={[styles.title, { color: colors.text }]}>Welcome Back</Text>
+            <Text style={[styles.title, { color: colors.text }]}>
+              Welcome Back
+            </Text>
             <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-              Sign in to your account
+              Sign in to your account to continue
             </Text>
           </View>
 
@@ -234,14 +83,19 @@ export default function LoginScreen({ navigation }: any) {
             <View style={styles.inputContainer}>
               <Mail size={20} color={colors.textSecondary} style={styles.inputIcon} />
               <TextInput
-                style={[styles.input, { color: colors.text, backgroundColor: colors.surface }]}
-                placeholder="Email address"
+                style={[styles.input, { 
+                  color: colors.text, 
+                  borderColor: colors.border,
+                  backgroundColor: colors.surface 
+                }]}
+                placeholder="Email Address"
                 placeholderTextColor={colors.textSecondary}
                 value={formData.email}
                 onChangeText={(text) => setFormData({ ...formData, email: text })}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
+                autoComplete="email"
               />
             </View>
 
@@ -249,7 +103,11 @@ export default function LoginScreen({ navigation }: any) {
             <View style={styles.inputContainer}>
               <Lock size={20} color={colors.textSecondary} style={styles.inputIcon} />
               <TextInput
-                style={[styles.input, { color: colors.text, backgroundColor: colors.surface }]}
+                style={[styles.input, { 
+                  color: colors.text, 
+                  borderColor: colors.border,
+                  backgroundColor: colors.surface 
+                }]}
                 placeholder="Password"
                 placeholderTextColor={colors.textSecondary}
                 value={formData.password}
@@ -257,10 +115,11 @@ export default function LoginScreen({ navigation }: any) {
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
                 autoCorrect={false}
+                autoComplete="password"
               />
               <TouchableOpacity
-                onPress={() => setShowPassword(!showPassword)}
                 style={styles.eyeButton}
+                onPress={() => setShowPassword(!showPassword)}
               >
                 {showPassword ? (
                   <EyeOff size={20} color={colors.textSecondary} />
@@ -269,22 +128,6 @@ export default function LoginScreen({ navigation }: any) {
                 )}
               </TouchableOpacity>
             </View>
-
-            {/* Two-Factor Authentication */}
-            {showTwoFactor && (
-              <View style={styles.inputContainer}>
-                <Shield size={20} color={colors.textSecondary} style={styles.inputIcon} />
-                <TextInput
-                  style={[styles.input, { color: colors.text, backgroundColor: colors.surface }]}
-                  placeholder="2FA Code (6 digits)"
-                  placeholderTextColor={colors.textSecondary}
-                  value={formData.twoFactorCode}
-                  onChangeText={(text) => setFormData({ ...formData, twoFactorCode: text })}
-                  keyboardType="numeric"
-                  maxLength={6}
-                />
-              </View>
-            )}
 
             {/* Forgot Password */}
             <TouchableOpacity onPress={handleForgotPassword} style={styles.forgotPassword}>
@@ -297,124 +140,125 @@ export default function LoginScreen({ navigation }: any) {
             <TouchableOpacity
               style={[
                 styles.loginButton,
-                {
-                  backgroundColor: colors.primary,
-                  opacity: isLoading || isVerifying ? 0.7 : 1
-                }
+                { backgroundColor: colors.primary },
+                (isSubmitting || isLoading) && { opacity: 0.7 }
               ]}
               onPress={handleLogin}
-              disabled={isLoading || isVerifying}
+              disabled={isSubmitting || isLoading}
             >
-              {isLoading || isVerifying ? (
+              {isSubmitting || isLoading ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.loginButtonText}>
-                  {showTwoFactor ? 'Verify & Sign In' : 'Sign In'}
-                </Text>
+                <Text style={styles.loginButtonText}>Sign In</Text>
               )}
             </TouchableOpacity>
 
             {/* Divider */}
             <View style={styles.divider}>
               <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
-              <Text style={[styles.dividerText, { color: colors.textSecondary }]}>or</Text>
+              <Text style={[styles.dividerText, { color: colors.textSecondary }]}>
+                or
+              </Text>
               <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
             </View>
 
-            {/* Register Link */}
-            <View style={styles.registerContainer}>
-              <Text style={[styles.registerText, { color: colors.textSecondary }]}>
-                Don't have an account?{' '}
+            {/* Register Button */}
+            <TouchableOpacity
+              style={[
+                styles.registerButton,
+                { borderColor: colors.border, backgroundColor: colors.surface }
+              ]}
+              onPress={handleRegister}
+            >
+              <Text style={[styles.registerButtonText, { color: colors.text }]}>
+                Create New Account
               </Text>
-              <TouchableOpacity onPress={handleRegister}>
-                <Text style={[styles.registerLink, { color: colors.primary }]}>
-                  Sign up
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Wallet Connection Notice */}
-            {isConnected && (
-              <View style={[styles.walletNotice, { backgroundColor: colors.success + '20', borderColor: colors.success }]}>
-                <CheckCircle size={16} color={colors.success} />
-                <Text style={[styles.walletNoticeText, { color: colors.success }]}>
-                  Wallet connected: {walletAddress?.slice(0, 6)}...{walletAddress?.slice(-4)}
-                </Text>
-              </View>
-            )}
+            </TouchableOpacity>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+
+          {/* Footer */}
+          <View style={styles.footer}>
+            <Text style={[styles.footerText, { color: colors.textSecondary }]}>
+              By signing in, you agree to our{' '}
+              <Text style={{ color: colors.primary }}>Terms of Service</Text>
+              {' '}and{' '}
+              <Text style={{ color: colors.primary }}>Privacy Policy</Text>
+            </Text>
+          </View>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
   keyboardAvoidingView: {
     flex: 1,
   },
-  scrollContent: {
+  scrollContainer: {
     flexGrow: 1,
-    padding: 20,
+    justifyContent: 'center',
+  },
+  container: {
+    flex: 1,
+    paddingHorizontal: 24,
+    paddingVertical: 40,
+    justifyContent: 'center',
   },
   header: {
     alignItems: 'center',
-    marginTop: 40,
-    marginBottom: 40,
-  },
-  backButton: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    padding: 8,
+    marginBottom: 48,
   },
   title: {
-    fontSize: 28,
-    fontWeight: '700',
+    fontSize: 32,
+    fontWeight: 'bold',
     marginBottom: 8,
+    textAlign: 'center',
   },
   subtitle: {
     fontSize: 16,
     textAlign: 'center',
+    lineHeight: 24,
   },
   form: {
-    flex: 1,
+    marginBottom: 32,
   },
   inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.1)',
-    paddingHorizontal: 16,
-    paddingVertical: 4,
+    position: 'relative',
+    marginBottom: 20,
   },
   inputIcon: {
-    marginRight: 12,
+    position: 'absolute',
+    left: 16,
+    top: 16,
+    zIndex: 1,
   },
   input: {
-    flex: 1,
+    height: 56,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 48,
     fontSize: 16,
     paddingVertical: 16,
   },
   eyeButton: {
-    padding: 8,
+    position: 'absolute',
+    right: 16,
+    top: 16,
+    zIndex: 1,
   },
   forgotPassword: {
     alignSelf: 'flex-end',
-    marginBottom: 24,
+    marginBottom: 32,
   },
   forgotPasswordText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   loginButton: {
-    padding: 16,
+    height: 56,
     borderRadius: 12,
+    justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 24,
   },
@@ -426,7 +270,7 @@ const styles = StyleSheet.create({
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 24,
+    marginBottom: 24,
   },
   dividerLine: {
     flex: 1,
@@ -436,29 +280,23 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     fontSize: 14,
   },
-  registerContainer: {
-    flexDirection: 'row',
+  registerButton: {
+    height: 56,
+    borderRadius: 12,
+    borderWidth: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  registerText: {
-    fontSize: 14,
-  },
-  registerLink: {
-    fontSize: 14,
+  registerButtonText: {
+    fontSize: 16,
     fontWeight: '600',
   },
-  walletNotice: {
-    flexDirection: 'row',
+  footer: {
     alignItems: 'center',
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    marginTop: 16,
-    gap: 8,
   },
-  walletNoticeText: {
-    fontSize: 14,
-    fontWeight: '500',
+  footerText: {
+    fontSize: 12,
+    textAlign: 'center',
+    lineHeight: 18,
   },
 }); 

@@ -32,7 +32,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
         await web3Service.initialize(config);
       } catch (err) {
-        console.error('Failed to initialize Web3Service:', err);
+        // Production logging would go here
         setError('Failed to initialize blockchain connection');
       }
     };
@@ -49,7 +49,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       setWalletAddress(address);
       setIsConnected(true);
     } catch (err) {
-      console.error('Wallet connection failed:', err);
+      // Production logging would go here
       setError(err instanceof Error ? err.message : 'Failed to connect wallet');
     } finally {
       setIsConnecting(false);

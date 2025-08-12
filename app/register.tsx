@@ -9,12 +9,12 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  ScrollView
+  ScrollView,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Eye, EyeOff, Mail, Lock, User, Phone, ArrowLeft, Shield, CheckCircle } from 'lucide-react-native';
+import { Eye, EyeOff, Mail, Lock, User, Briefcase, AlertCircle } from 'lucide-react-native';
 import { useTheme } from '@/contexts/ThemeContext';
-import { useWallet } from '@/contexts/WalletContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { router } from 'expo-router';
 
 interface RegisterFormData {
   email: string;
@@ -23,19 +23,12 @@ interface RegisterFormData {
   lastName: string;
   password: string;
   confirmPassword: string;
-  phone: string;
   userType: 'client' | 'freelancer';
-  agreeToTerms: boolean;
-  agreeToPrivacy: boolean;
-  marketingConsent: boolean;
 }
 
-export default function RegisterScreen({ navigation }: any) {
+export default function RegisterScreen() {
   const { colors } = useTheme();
-  const { isConnected, walletAddress } = useWallet();
-  const [isLoading, setIsLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const { register, isLoading } = useAuth();
   const [formData, setFormData] = useState<RegisterFormData>({
     email: '',
     username: '',
@@ -43,161 +36,98 @@ export default function RegisterScreen({ navigation }: any) {
     lastName: '',
     password: '',
     confirmPassword: '',
-    phone: '',
-    userType: 'client',
-    agreeToTerms: false,
-    agreeToPrivacy: false,
-    marketingConsent: false
+    userType: 'freelancer',
   });
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const validateForm = (): { isValid: boolean; errors: string[] } => {
+  const validateForm = (): string[] => {
     const errors: string[] = [];
 
-    // Email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!formData.email || !emailRegex.test(formData.email)) {
+    if (!formData.email || !formData.email.includes('@')) {
       errors.push('Please enter a valid email address');
     }
 
-    // Username validation
     if (!formData.username || formData.username.length < 3) {
       errors.push('Username must be at least 3 characters long');
     }
 
-    // Name validation
-    if (!formData.firstName || formData.firstName.length < 2) {
-      errors.push('First name must be at least 2 characters long');
+    if (!formData.firstName || formData.firstName.trim().length === 0) {
+      errors.push('First name is required');
     }
 
-    if (!formData.lastName || formData.lastName.length < 2) {
-      errors.push('Last name must be at least 2 characters long');
+    if (!formData.lastName || formData.lastName.trim().length === 0) {
+      errors.push('Last name is required');
     }
 
-    // Password validation
     if (!formData.password || formData.password.length < 8) {
       errors.push('Password must be at least 8 characters long');
     }
 
-    if (!/(?=.*[a-z])/.test(formData.password)) {
-      errors.push('Password must contain at least one lowercase letter');
-    }
-
-    if (!/(?=.*[A-Z])/.test(formData.password)) {
-      errors.push('Password must contain at least one uppercase letter');
-    }
-
-    if (!/(?=.*\d)/.test(formData.password)) {
-      errors.push('Password must contain at least one number');
-    }
-
-    if (!/(?=.*[!@#$%^&*(),.?":{}|<>])/.test(formData.password)) {
-      errors.push('Password must contain at least one special character');
-    }
-
-    // Confirm password validation
     if (formData.password !== formData.confirmPassword) {
       errors.push('Passwords do not match');
     }
 
-    // Phone validation (optional)
-    if (formData.phone && !/^\+?[\d\s\-\(\)]+$/.test(formData.phone)) {
-      errors.push('Please enter a valid phone number');
-    }
-
-    // Terms and privacy agreement
-    if (!formData.agreeToTerms) {
-      errors.push('You must agree to the Terms of Service');
-    }
-
-    if (!formData.agreeToPrivacy) {
-      errors.push('You must agree to the Privacy Policy');
-    }
-
-    return {
-      isValid: errors.length === 0,
-      errors
-    };
+    return errors;
   };
 
   const handleRegister = async () => {
-    const validation = validateForm();
-    if (!validation.isValid) {
-      Alert.alert('Validation Error', validation.errors.join('\n'));
+    const errors = validateForm();
+    
+    if (errors.length > 0) {
+      Alert.alert('Validation Error', errors.join('\n'));
       return;
     }
 
     try {
-      setIsLoading(true);
-
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/auth/register`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: formData.email,
-          username: formData.username,
-          firstName: formData.firstName,
-          lastName: formData.lastName,
-          password: formData.password,
-          phone: formData.phone || undefined,
-          userType: formData.userType,
-          walletAddress: walletAddress || undefined,
-          metadata: {
-            registrationSource: 'mobile',
-            marketingConsent: formData.marketingConsent,
-            termsAccepted: formData.agreeToTerms,
-            privacyAccepted: formData.agreeToPrivacy
-          }
-        }),
+      setIsSubmitting(true);
+      await register({
+        email: formData.email.trim(),
+        username: formData.username.trim(),
+        firstName: formData.firstName.trim(),
+        lastName: formData.lastName.trim(),
+        password: formData.password,
+        userType: formData.userType,
       });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Registration failed');
-      }
-
+      
+      // Show success message
       Alert.alert(
         'Registration Successful!',
-        'Please check your email to verify your account before logging in.',
-        [
-          {
-            text: 'OK',
-            onPress: () => navigation.navigate('login')
-          }
-        ]
+        'Your account has been created. Please check your email for verification.',
+        [{ text: 'OK', onPress: () => router.push('/login') }]
       );
-
     } catch (error) {
-      console.error('Registration failed:', error);
       Alert.alert(
         'Registration Failed',
-        error instanceof Error ? error.message : 'An error occurred during registration. Please try again.'
+        'An error occurred during registration. Please try again.'
       );
     } finally {
-      setIsLoading(false);
+      setIsSubmitting(false);
     }
   };
 
+  const handleLogin = () => {
+    router.push('/login');
+  };
+
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardAvoidingView}
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={styles.keyboardAvoidingView}
+    >
+      <ScrollView
+        contentContainerStyle={styles.scrollContainer}
+        keyboardShouldPersistTaps="handled"
       >
-        <ScrollView contentContainerStyle={styles.scrollContent}>
+        <View style={styles.container}>
           {/* Header */}
           <View style={styles.header}>
-            <TouchableOpacity
-              onPress={() => navigation.goBack()}
-              style={styles.backButton}
-            >
-              <ArrowLeft size={24} color={colors.text} />
-            </TouchableOpacity>
-            <Text style={[styles.title, { color: colors.text }]}>Create Account</Text>
+            <Text style={[styles.title, { color: colors.text }]}>
+              Create Account
+            </Text>
             <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-              Join Lancerscape2 today
+              Join Lancerscape2 and start your freelancing journey
             </Text>
           </View>
 
@@ -207,14 +137,19 @@ export default function RegisterScreen({ navigation }: any) {
             <View style={styles.inputContainer}>
               <Mail size={20} color={colors.textSecondary} style={styles.inputIcon} />
               <TextInput
-                style={[styles.input, { color: colors.text, backgroundColor: colors.surface }]}
-                placeholder="Email address"
+                style={[styles.input, { 
+                  color: colors.text, 
+                  borderColor: colors.border,
+                  backgroundColor: colors.surface 
+                }]}
+                placeholder="Email Address"
                 placeholderTextColor={colors.textSecondary}
                 value={formData.email}
                 onChangeText={(text) => setFormData({ ...formData, email: text })}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
+                autoComplete="email"
               />
             </View>
 
@@ -222,13 +157,18 @@ export default function RegisterScreen({ navigation }: any) {
             <View style={styles.inputContainer}>
               <User size={20} color={colors.textSecondary} style={styles.inputIcon} />
               <TextInput
-                style={[styles.input, { color: colors.text, backgroundColor: colors.surface }]}
+                style={[styles.input, { 
+                  color: colors.text, 
+                  borderColor: colors.border,
+                  backgroundColor: colors.surface 
+                }]}
                 placeholder="Username"
                 placeholderTextColor={colors.textSecondary}
                 value={formData.username}
                 onChangeText={(text) => setFormData({ ...formData, username: text })}
                 autoCapitalize="none"
                 autoCorrect={false}
+                autoComplete="username"
               />
             </View>
 
@@ -236,13 +176,18 @@ export default function RegisterScreen({ navigation }: any) {
             <View style={styles.inputContainer}>
               <User size={20} color={colors.textSecondary} style={styles.inputIcon} />
               <TextInput
-                style={[styles.input, { color: colors.text, backgroundColor: colors.surface }]}
-                placeholder="First name"
+                style={[styles.input, { 
+                  color: colors.text, 
+                  borderColor: colors.border,
+                  backgroundColor: colors.surface 
+                }]}
+                placeholder="First Name"
                 placeholderTextColor={colors.textSecondary}
                 value={formData.firstName}
                 onChangeText={(text) => setFormData({ ...formData, firstName: text })}
                 autoCapitalize="words"
                 autoCorrect={false}
+                autoComplete="given-name"
               />
             </View>
 
@@ -250,26 +195,18 @@ export default function RegisterScreen({ navigation }: any) {
             <View style={styles.inputContainer}>
               <User size={20} color={colors.textSecondary} style={styles.inputIcon} />
               <TextInput
-                style={[styles.input, { color: colors.text, backgroundColor: colors.surface }]}
-                placeholder="Last name"
+                style={[styles.input, { 
+                  color: colors.text, 
+                  borderColor: colors.border,
+                  backgroundColor: colors.surface 
+                }]}
+                placeholder="Last Name"
                 placeholderTextColor={colors.textSecondary}
                 value={formData.lastName}
                 onChangeText={(text) => setFormData({ ...formData, lastName: text })}
                 autoCapitalize="words"
                 autoCorrect={false}
-              />
-            </View>
-
-            {/* Phone Input (Optional) */}
-            <View style={styles.inputContainer}>
-              <Phone size={20} color={colors.textSecondary} style={styles.inputIcon} />
-              <TextInput
-                style={[styles.input, { color: colors.text, backgroundColor: colors.surface }]}
-                placeholder="Phone number (optional)"
-                placeholderTextColor={colors.textSecondary}
-                value={formData.phone}
-                onChangeText={(text) => setFormData({ ...formData, phone: text })}
-                keyboardType="phone-pad"
+                autoComplete="family-name"
               />
             </View>
 
@@ -277,7 +214,11 @@ export default function RegisterScreen({ navigation }: any) {
             <View style={styles.inputContainer}>
               <Lock size={20} color={colors.textSecondary} style={styles.inputIcon} />
               <TextInput
-                style={[styles.input, { color: colors.text, backgroundColor: colors.surface }]}
+                style={[styles.input, { 
+                  color: colors.text, 
+                  borderColor: colors.border,
+                  backgroundColor: colors.surface 
+                }]}
                 placeholder="Password"
                 placeholderTextColor={colors.textSecondary}
                 value={formData.password}
@@ -285,10 +226,11 @@ export default function RegisterScreen({ navigation }: any) {
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
                 autoCorrect={false}
+                autoComplete="new-password"
               />
               <TouchableOpacity
-                onPress={() => setShowPassword(!showPassword)}
                 style={styles.eyeButton}
+                onPress={() => setShowPassword(!showPassword)}
               >
                 {showPassword ? (
                   <EyeOff size={20} color={colors.textSecondary} />
@@ -302,18 +244,23 @@ export default function RegisterScreen({ navigation }: any) {
             <View style={styles.inputContainer}>
               <Lock size={20} color={colors.textSecondary} style={styles.inputIcon} />
               <TextInput
-                style={[styles.input, { color: colors.text, backgroundColor: colors.surface }]}
-                placeholder="Confirm password"
+                style={[styles.input, { 
+                  color: colors.text, 
+                  borderColor: colors.border,
+                  backgroundColor: colors.surface 
+                }]}
+                placeholder="Confirm Password"
                 placeholderTextColor={colors.textSecondary}
                 value={formData.confirmPassword}
                 onChangeText={(text) => setFormData({ ...formData, confirmPassword: text })}
                 secureTextEntry={!showConfirmPassword}
                 autoCapitalize="none"
                 autoCorrect={false}
+                autoComplete="new-password"
               />
               <TouchableOpacity
-                onPress={() => setShowConfirmPassword(!showConfirmPassword)}
                 style={styles.eyeButton}
+                onPress={() => setShowConfirmPassword(!showConfirmPassword)}
               >
                 {showConfirmPassword ? (
                   <EyeOff size={20} color={colors.textSecondary} />
@@ -325,35 +272,21 @@ export default function RegisterScreen({ navigation }: any) {
 
             {/* User Type Selection */}
             <View style={styles.userTypeContainer}>
-              <Text style={[styles.userTypeLabel, { color: colors.text }]}>I want to:</Text>
+              <Text style={[styles.userTypeLabel, { color: colors.textSecondary }]}>
+                I want to:
+              </Text>
               <View style={styles.userTypeButtons}>
                 <TouchableOpacity
                   style={[
                     styles.userTypeButton,
-                    {
-                      backgroundColor: formData.userType === 'client' ? colors.primary : colors.surface,
-                      borderColor: colors.border
-                    }
-                  ]}
-                  onPress={() => setFormData({ ...formData, userType: 'client' })}
-                >
-                  <Text style={[
-                    styles.userTypeButtonText,
-                    { color: formData.userType === 'client' ? '#fff' : colors.text }
-                  ]}>
-                    Hire Freelancers
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.userTypeButton,
-                    {
+                    { 
                       backgroundColor: formData.userType === 'freelancer' ? colors.primary : colors.surface,
                       borderColor: colors.border
                     }
                   ]}
                   onPress={() => setFormData({ ...formData, userType: 'freelancer' })}
                 >
+                  <Briefcase size={20} color={formData.userType === 'freelancer' ? '#fff' : colors.text} />
                   <Text style={[
                     styles.userTypeButtonText,
                     { color: formData.userType === 'freelancer' ? '#fff' : colors.text }
@@ -361,220 +294,168 @@ export default function RegisterScreen({ navigation }: any) {
                     Work as Freelancer
                   </Text>
                 </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={[
+                    styles.userTypeButton,
+                    { 
+                      backgroundColor: formData.userType === 'client' ? colors.primary : colors.surface,
+                      borderColor: colors.border
+                    }
+                  ]}
+                  onPress={() => setFormData({ ...formData, userType: 'client' })}
+                >
+                  <User size={20} color={formData.userType === 'client' ? '#fff' : colors.text} />
+                  <Text style={[
+                    styles.userTypeButtonText,
+                    { color: formData.userType === 'client' ? '#fff' : colors.text }
+                  ]}>
+                    Hire Freelancers
+                  </Text>
+                </TouchableOpacity>
               </View>
-            </View>
-
-            {/* Terms and Privacy */}
-            <View style={styles.termsContainer}>
-              <TouchableOpacity
-                style={styles.checkboxContainer}
-                onPress={() => setFormData({ ...formData, agreeToTerms: !formData.agreeToTerms })}
-              >
-                <View style={[
-                  styles.checkbox,
-                  {
-                    backgroundColor: formData.agreeToTerms ? colors.primary : 'transparent',
-                    borderColor: colors.border
-                  }
-                ]}>
-                  {formData.agreeToTerms && <CheckCircle size={16} color="#fff" />}
-                </View>
-                <Text style={[styles.checkboxText, { color: colors.text }]}>
-                  I agree to the{' '}
-                  <Text style={[styles.link, { color: colors.primary }]}>Terms of Service</Text>
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.checkboxContainer}
-                onPress={() => setFormData({ ...formData, agreeToPrivacy: !formData.agreeToPrivacy })}
-              >
-                <View style={[
-                  styles.checkbox,
-                  {
-                    backgroundColor: formData.agreeToPrivacy ? colors.primary : 'transparent',
-                    borderColor: colors.border
-                  }
-                ]}>
-                  {formData.agreeToPrivacy && <CheckCircle size={16} color="#fff" />}
-                </View>
-                <Text style={[styles.checkboxText, { color: colors.text }]}>
-                  I agree to the{' '}
-                  <Text style={[styles.link, { color: colors.primary }]}>Privacy Policy</Text>
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.checkboxContainer}
-                onPress={() => setFormData({ ...formData, marketingConsent: !formData.marketingConsent })}
-              >
-                <View style={[
-                  styles.checkbox,
-                  {
-                    backgroundColor: formData.marketingConsent ? colors.primary : 'transparent',
-                    borderColor: colors.border
-                  }
-                ]}>
-                  {formData.marketingConsent && <CheckCircle size={16} color="#fff" />}
-                </View>
-                <Text style={[styles.checkboxText, { color: colors.text }]}>
-                  I want to receive marketing emails (optional)
-                </Text>
-              </TouchableOpacity>
             </View>
 
             {/* Register Button */}
             <TouchableOpacity
               style={[
                 styles.registerButton,
-                {
-                  backgroundColor: colors.primary,
-                  opacity: isLoading ? 0.7 : 1
-                }
+                { backgroundColor: colors.primary },
+                (isSubmitting || isLoading) && { opacity: 0.7 }
               ]}
               onPress={handleRegister}
-              disabled={isLoading}
+              disabled={isSubmitting || isLoading}
             >
-              {isLoading ? (
+              {isSubmitting || isLoading ? (
                 <ActivityIndicator color="#fff" />
               ) : (
                 <Text style={styles.registerButtonText}>Create Account</Text>
               )}
             </TouchableOpacity>
 
-            {/* Login Link */}
-            <View style={styles.loginContainer}>
-              <Text style={[styles.loginText, { color: colors.textSecondary }]}>
-                Already have an account?{' '}
+            {/* Divider */}
+            <View style={styles.divider}>
+              <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+              <Text style={[styles.dividerText, { color: colors.textSecondary }]}>
+                or
               </Text>
-              <TouchableOpacity onPress={() => navigation.navigate('login')}>
-                <Text style={[styles.loginLink, { color: colors.primary }]}>
-                  Sign in
-                </Text>
-              </TouchableOpacity>
+              <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
             </View>
 
-            {/* Wallet Connection Notice */}
-            {isConnected && (
-              <View style={[styles.walletNotice, { backgroundColor: colors.success + '20', borderColor: colors.success }]}>
-                <CheckCircle size={16} color={colors.success} />
-                <Text style={[styles.walletNoticeText, { color: colors.success }]}>
-                  Wallet connected: {walletAddress?.slice(0, 6)}...{walletAddress?.slice(-4)}
-                </Text>
-              </View>
-            )}
+            {/* Login Button */}
+            <TouchableOpacity
+              style={[
+                styles.loginButton,
+                { borderColor: colors.border, backgroundColor: colors.surface }
+              ]}
+              onPress={handleLogin}
+            >
+              <Text style={[styles.loginButtonText, { color: colors.text }]}>
+                Already have an account? Sign In
+              </Text>
+            </TouchableOpacity>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+
+          {/* Footer */}
+          <View style={styles.footer}>
+            <Text style={[styles.footerText, { color: colors.textSecondary }]}>
+              By creating an account, you agree to our{' '}
+              <Text style={{ color: colors.primary }}>Terms of Service</Text>
+              {' '}and{' '}
+              <Text style={{ color: colors.primary }}>Privacy Policy</Text>
+            </Text>
+          </View>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
   keyboardAvoidingView: {
     flex: 1,
   },
-  scrollContent: {
+  scrollContainer: {
     flexGrow: 1,
-    padding: 20,
+    justifyContent: 'center',
+  },
+  container: {
+    flex: 1,
+    paddingHorizontal: 24,
+    paddingVertical: 40,
+    justifyContent: 'center',
   },
   header: {
     alignItems: 'center',
-    marginTop: 40,
-    marginBottom: 40,
-  },
-  backButton: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    padding: 8,
+    marginBottom: 48,
   },
   title: {
-    fontSize: 28,
-    fontWeight: '700',
+    fontSize: 32,
+    fontWeight: 'bold',
     marginBottom: 8,
+    textAlign: 'center',
   },
   subtitle: {
     fontSize: 16,
     textAlign: 'center',
+    lineHeight: 24,
   },
   form: {
-    flex: 1,
+    marginBottom: 32,
   },
   inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.1)',
-    paddingHorizontal: 16,
-    paddingVertical: 4,
+    position: 'relative',
+    marginBottom: 20,
   },
   inputIcon: {
-    marginRight: 12,
+    position: 'absolute',
+    left: 16,
+    top: 16,
+    zIndex: 1,
   },
   input: {
-    flex: 1,
+    height: 56,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 48,
     fontSize: 16,
     paddingVertical: 16,
   },
   eyeButton: {
-    padding: 8,
+    position: 'absolute',
+    right: 16,
+    top: 16,
+    zIndex: 1,
   },
   userTypeContainer: {
-    marginBottom: 24,
+    marginBottom: 32,
   },
   userTypeLabel: {
     fontSize: 16,
     fontWeight: '600',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   userTypeButtons: {
-    flexDirection: 'row',
     gap: 12,
   },
   userTypeButton: {
-    flex: 1,
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    alignItems: 'center',
-  },
-  userTypeButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  termsContainer: {
-    marginBottom: 24,
-  },
-  checkboxContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 4,
-    borderWidth: 2,
-    marginRight: 12,
-    alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 12,
   },
-  checkboxText: {
-    fontSize: 14,
-    flex: 1,
-  },
-  link: {
+  userTypeButtonText: {
+    fontSize: 16,
     fontWeight: '600',
   },
   registerButton: {
-    padding: 16,
+    height: 56,
     borderRadius: 12,
+    justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 24,
   },
@@ -583,29 +464,36 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  loginContainer: {
+  divider: {
     flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+  },
+  dividerText: {
+    marginHorizontal: 16,
+    fontSize: 14,
+  },
+  loginButton: {
+    height: 56,
+    borderRadius: 12,
+    borderWidth: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  loginText: {
-    fontSize: 14,
-  },
-  loginLink: {
-    fontSize: 14,
+  loginButtonText: {
+    fontSize: 16,
     fontWeight: '600',
   },
-  walletNotice: {
-    flexDirection: 'row',
+  footer: {
     alignItems: 'center',
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    marginTop: 16,
-    gap: 8,
   },
-  walletNoticeText: {
-    fontSize: 14,
-    fontWeight: '500',
+  footerText: {
+    fontSize: 12,
+    textAlign: 'center',
+    lineHeight: 18,
   },
 }); 

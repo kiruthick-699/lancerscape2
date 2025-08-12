@@ -1,32 +1,24 @@
 import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  TextInput, 
-  TouchableOpacity, 
-  ScrollView, 
-  StyleSheet, 
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
   Alert,
-  ActivityIndicator 
+  ActivityIndicator,
+  ScrollView,
 } from 'react-native';
-import { X, DollarSign, Calendar, MapPin, Briefcase } from 'lucide-react-native';
+import { X, Send } from 'lucide-react-native';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useWallet } from '@/contexts/WalletContext';
 import web3Service from '@/services/web3Service';
+import { JobFormData } from '@/types';
 
 interface JobPostingFormProps {
   visible: boolean;
   onClose: () => void;
   onSuccess: (jobId: number) => void;
-}
-
-interface JobFormData {
-  title: string;
-  description: string;
-  budget: string;
-  deadline: string;
-  category: number;
-  isRemote: boolean;
 }
 
 const categories = [
@@ -61,28 +53,37 @@ export default function JobPostingForm({ visible, onClose, onSuccess }: JobPosti
       return;
     }
 
+    // Validate budget
+    const budget = parseFloat(formData.budget);
+    if (isNaN(budget) || budget <= 0) {
+      Alert.alert('Invalid Budget', 'Budget must be a positive number.');
+      return;
+    }
+
+    // Validate deadline
+    const deadline = new Date(formData.deadline);
+    const now = new Date();
+    if (isNaN(deadline.getTime()) || deadline <= now) {
+      Alert.alert('Invalid Deadline', 'Deadline must be a valid future date.');
+      return;
+    }
+
     try {
       setIsSubmitting(true);
 
-      // Convert budget to wei
-      const budgetInWei = web3Service.parseEther(formData.budget);
-      
-      // Convert deadline to timestamp
-      const deadlineTimestamp = Math.floor(new Date(formData.deadline).getTime() / 1000);
-
-      // Post job to blockchain
       const jobId = await web3Service.postJob(
         formData.title,
         formData.description,
-        budgetInWei.toString(),
-        deadlineTimestamp,
+        formData.budget,
+        deadline.getTime(),
         formData.category,
         formData.isRemote
       );
 
+      // Show success message
       Alert.alert(
-        'Job Posted Successfully!',
-        `Your job has been posted with ID: ${jobId}`,
+        'Success!',
+        `Job posted successfully with ID: ${jobId}`,
         [
           {
             text: 'OK',
@@ -93,11 +94,9 @@ export default function JobPostingForm({ visible, onClose, onSuccess }: JobPosti
           }
         ]
       );
-
     } catch (error) {
-      console.error('Job posting failed:', error);
       Alert.alert(
-        'Posting Failed',
+        'Job Posting Failed',
         error instanceof Error ? error.message : 'Failed to post job. Please try again.'
       );
     } finally {
@@ -106,186 +105,153 @@ export default function JobPostingForm({ visible, onClose, onSuccess }: JobPosti
   };
 
   const handleClose = () => {
-    setFormData({
-      title: '',
-      description: '',
-      budget: '',
-      deadline: '',
-      category: 0,
-      isRemote: false,
-    });
-    onClose();
+    if (!isSubmitting) {
+      // Reset form
+      setFormData({
+        title: '',
+        description: '',
+        budget: '',
+        deadline: '',
+        category: 0,
+        isRemote: false,
+      });
+      onClose();
+    }
   };
 
   if (!visible) return null;
 
   return (
-    <View style={[styles.overlay, { backgroundColor: colors.background + 'CC' }]}>
-      <View style={[styles.modal, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+    <View style={[styles.overlay, { backgroundColor: 'rgba(0, 0, 0, 0.5)' }]}>
+      <View style={[styles.container, { backgroundColor: colors.surface }]}>
         <View style={styles.header}>
-          <Text style={[styles.title, { color: colors.text }]}>Post New Job</Text>
+          <Text style={[styles.title, { color: colors.text }]}>Post a Job</Text>
           <TouchableOpacity onPress={handleClose} disabled={isSubmitting}>
             <X size={24} color={colors.text} />
           </TouchableOpacity>
         </View>
 
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-          {/* Wallet Status */}
-          {!isConnected && (
-            <View style={[styles.warning, { backgroundColor: colors.warning + '20', borderColor: colors.warning }]}>
-              <Text style={[styles.warningText, { color: colors.warning }]}>
-                Connect your wallet to post jobs
-              </Text>
-            </View>
-          )}
-
-          {/* Job Title */}
-          <View style={styles.field}>
-            <Text style={[styles.label, { color: colors.text }]}>Job Title *</Text>
-            <TextInput
-              style={[styles.input, { 
-                backgroundColor: colors.background, 
-                borderColor: colors.border,
-                color: colors.text 
-              }]}
-              value={formData.title}
-              onChangeText={(text) => setFormData({ ...formData, title: text })}
-              placeholder="e.g., Build a React Native App"
-              placeholderTextColor={colors.textSecondary}
-            />
-          </View>
-
-          {/* Job Description */}
-          <View style={styles.field}>
-            <Text style={[styles.label, { color: colors.text }]}>Description *</Text>
-            <TextInput
-              style={[styles.textArea, { 
-                backgroundColor: colors.background, 
-                borderColor: colors.border,
-                color: colors.text 
-              }]}
-              value={formData.description}
-              onChangeText={(text) => setFormData({ ...formData, description: text })}
-              placeholder="Describe the job requirements, deliverables, and expectations..."
-              placeholderTextColor={colors.textSecondary}
-              multiline
-              numberOfLines={6}
-              textAlignVertical="top"
-            />
-          </View>
-
-          {/* Budget */}
-          <View style={styles.field}>
-            <Text style={[styles.label, { color: colors.text }]}>Budget (ETH) *</Text>
-            <View style={[styles.inputContainer, { 
-              backgroundColor: colors.background, 
-              borderColor: colors.border 
-            }]}>
-              <DollarSign size={20} color={colors.textSecondary} />
+          <View style={styles.form}>
+            <View style={styles.inputGroup}>
+              <Text style={[styles.label, { color: colors.text }]}>Job Title *</Text>
               <TextInput
-                style={[styles.input, { color: colors.text, flex: 1 }]}
+                style={[styles.input, { color: colors.text, backgroundColor: colors.background, borderColor: colors.border }]}
+                placeholder="Enter job title"
+                placeholderTextColor={colors.textSecondary}
+                value={formData.title}
+                onChangeText={(text) => setFormData({ ...formData, title: text })}
+                editable={!isSubmitting}
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={[styles.label, { color: colors.text }]}>Description *</Text>
+              <TextInput
+                style={[styles.textArea, { color: colors.text, backgroundColor: colors.background, borderColor: colors.border }]}
+                placeholder="Describe the job requirements, deliverables, and expectations..."
+                placeholderTextColor={colors.textSecondary}
+                value={formData.description}
+                onChangeText={(text) => setFormData({ ...formData, description: text })}
+                multiline
+                numberOfLines={6}
+                textAlignVertical="top"
+                editable={!isSubmitting}
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={[styles.label, { color: colors.text }]}>Budget ($) *</Text>
+              <TextInput
+                style={[styles.input, { color: colors.text, backgroundColor: colors.background, borderColor: colors.border }]}
+                placeholder="Enter budget amount"
+                placeholderTextColor={colors.textSecondary}
                 value={formData.budget}
                 onChangeText={(text) => setFormData({ ...formData, budget: text })}
-                placeholder="0.1"
-                placeholderTextColor={colors.textSecondary}
-                keyboardType="decimal-pad"
+                keyboardType="numeric"
+                editable={!isSubmitting}
               />
             </View>
-          </View>
 
-          {/* Deadline */}
-          <View style={styles.field}>
-            <Text style={[styles.label, { color: colors.text }]}>Deadline *</Text>
-            <View style={[styles.inputContainer, { 
-              backgroundColor: colors.background, 
-              borderColor: colors.border 
-            }]}>
-              <Calendar size={20} color={colors.textSecondary} />
+            <View style={styles.inputGroup}>
+              <Text style={[styles.label, { color: colors.text }]}>Deadline *</Text>
               <TextInput
-                style={[styles.input, { color: colors.text, flex: 1 }]}
-                value={formData.deadline}
-                onChangeText={(text) => setFormData({ ...formData, deadline: text })}
+                style={[styles.input, { color: colors.text, backgroundColor: colors.background, borderColor: colors.border }]}
                 placeholder="YYYY-MM-DD"
                 placeholderTextColor={colors.textSecondary}
+                value={formData.deadline}
+                onChangeText={(text) => setFormData({ ...formData, deadline: text })}
+                editable={!isSubmitting}
               />
             </View>
-          </View>
 
-          {/* Category */}
-          <View style={styles.field}>
-            <Text style={[styles.label, { color: colors.text }]}>Category</Text>
-            <View style={styles.categoryGrid}>
-              {categories.map((category) => (
-                <TouchableOpacity
-                  key={category.id}
-                  style={[
-                    styles.categoryButton,
-                    { 
-                      backgroundColor: formData.category === category.id 
-                        ? colors.primary 
-                        : colors.background,
-                      borderColor: colors.border 
-                    }
-                  ]}
-                  onPress={() => setFormData({ ...formData, category: category.id })}
-                >
-                  <Text style={styles.categoryIcon}>{category.icon}</Text>
-                  <Text style={[
-                    styles.categoryText,
-                    { color: formData.category === category.id ? '#fff' : colors.text }
-                  ]}>
-                    {category.name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          {/* Remote Work */}
-          <View style={styles.field}>
-            <TouchableOpacity
-              style={styles.remoteToggle}
-              onPress={() => setFormData({ ...formData, isRemote: !formData.isRemote })}
-            >
-              <MapPin size={20} color={formData.isRemote ? colors.primary : colors.textSecondary} />
-              <Text style={[styles.remoteText, { color: colors.text }]}>
-                Remote work allowed
-              </Text>
-              <View style={[
-                styles.toggle,
-                { backgroundColor: formData.isRemote ? colors.primary : colors.border }
-              ]}>
-                <View style={[
-                  styles.toggleHandle,
-                  { 
-                    backgroundColor: '#fff',
-                    transform: [{ translateX: formData.isRemote ? 16 : 0 }]
-                  }
-                ]} />
+            <View style={styles.inputGroup}>
+              <Text style={[styles.label, { color: colors.text }]}>Category</Text>
+              <View style={styles.categoryContainer}>
+                {categories.map((category) => (
+                  <TouchableOpacity
+                    key={category.id}
+                    style={[
+                      styles.categoryButton,
+                      { backgroundColor: colors.background, borderColor: colors.border },
+                      formData.category === category.id && { backgroundColor: colors.primary, borderColor: colors.primary }
+                    ]}
+                    onPress={() => setFormData({ ...formData, category: category.id })}
+                    disabled={isSubmitting}
+                  >
+                    <Text style={styles.categoryIcon}>{category.icon}</Text>
+                    <Text style={[
+                      styles.categoryText,
+                      { color: formData.category === category.id ? '#fff' : colors.text }
+                    ]}>
+                      {category.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
               </View>
-            </TouchableOpacity>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <TouchableOpacity
+                style={styles.remoteToggle}
+                onPress={() => setFormData({ ...formData, isRemote: !formData.isRemote })}
+                disabled={isSubmitting}
+              >
+                <View style={[
+                  styles.toggle,
+                  { backgroundColor: formData.isRemote ? colors.primary : colors.border }
+                ]}>
+                  <View style={[
+                    styles.toggleThumb,
+                    { backgroundColor: '#fff', transform: [{ translateX: formData.isRemote ? 20 : 0 }] }
+                  ]} />
+                </View>
+                <Text style={[styles.toggleLabel, { color: colors.text }]}>Remote Work</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </ScrollView>
 
-        {/* Submit Button */}
         <View style={styles.footer}>
           <TouchableOpacity
-            style={[
-              styles.submitButton,
-              { 
-                backgroundColor: isConnected ? colors.primary : colors.border,
-                opacity: isSubmitting ? 0.7 : 1
-              }
-            ]}
+            style={[styles.cancelButton, { backgroundColor: colors.background, borderColor: colors.border }]}
+            onPress={handleClose}
+            disabled={isSubmitting}
+          >
+            <Text style={[styles.cancelButtonText, { color: colors.text }]}>Cancel</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={[styles.submitButton, { backgroundColor: colors.primary }]}
             onPress={handleSubmit}
-            disabled={!isConnected || isSubmitting}
+            disabled={isSubmitting}
           >
             {isSubmitting ? (
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color="#fff" size="small" />
             ) : (
               <>
-                <Briefcase size={20} color="#fff" />
-                <Text style={styles.submitText}>Post Job</Text>
+                <Send size={16} color="#fff" />
+                <Text style={styles.submitButtonText}>Post Job</Text>
               </>
             )}
           </TouchableOpacity>
@@ -306,46 +272,35 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     zIndex: 1000,
   },
-  modal: {
+  container: {
     width: '90%',
+    maxWidth: 400,
     maxHeight: '80%',
     borderRadius: 16,
-    borderWidth: 1,
-    overflow: 'hidden',
+    padding: 20,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.1)',
+    marginBottom: 20,
   },
   title: {
     fontSize: 20,
     fontWeight: '700',
   },
   content: {
-    padding: 20,
+    flex: 1,
   },
-  warning: {
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    marginBottom: 20,
+  form: {
+    gap: 16,
   },
-  warningText: {
-    fontSize: 14,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  field: {
-    marginBottom: 20,
+  inputGroup: {
+    gap: 8,
   },
   label: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
-    marginBottom: 8,
   },
   input: {
     padding: 12,
@@ -358,72 +313,79 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     fontSize: 16,
-    height: 120,
+    minHeight: 120,
   },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  categoryGrid: {
+  categoryContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
   },
   categoryButton: {
-    flex: 1,
-    minWidth: '45%',
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    borderWidth: 1,
   },
   categoryIcon: {
-    fontSize: 24,
+    fontSize: 16,
   },
   categoryText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   remoteToggle: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
   },
-  remoteText: {
-    flex: 1,
-    fontSize: 16,
-  },
   toggle: {
-    width: 40,
+    width: 44,
     height: 24,
     borderRadius: 12,
     padding: 2,
   },
-  toggleHandle: {
+  toggleThumb: {
     width: 20,
     height: 20,
     borderRadius: 10,
   },
+  toggleLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
   footer: {
-    padding: 20,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.1)',
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 20,
+  },
+  cancelButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
   },
   submitButton: {
+    flex: 2,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 16,
-    borderRadius: 12,
     gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
   },
-  submitText: {
-    color: '#fff',
+  submitButtonText: {
     fontSize: 16,
     fontWeight: '600',
+    color: '#fff',
   },
 }); 

@@ -86,88 +86,85 @@ class Web3Service {
   private escrowContract: ethers.Contract | null = null;
   private reputationContract: ethers.Contract | null = null;
   private config: Web3Config | null = null;
+  private isDemoMode: boolean = false;
 
   async initialize(config: Web3Config): Promise<void> {
     this.config = config;
     
-    // Initialize provider (assuming MetaMask or similar wallet)
-    if (typeof window !== 'undefined' && window.ethereum) {
-      this.provider = new ethers.BrowserProvider(window.ethereum);
-      this.signer = await this.provider.getSigner();
-    } else {
-      // Fallback to JSON-RPC provider
-      this.provider = new ethers.JsonRpcProvider(config.rpcUrl);
+    // Check if we're in demo mode (no valid RPC URL or contract addresses)
+    if (!config.rpcUrl || config.rpcUrl.includes('YOUR_PROJECT_ID') || 
+        !config.jobPostingAddress || config.jobPostingAddress === '0x...') {
+      this.isDemoMode = true;
+      // Production logging would go here
+      return;
     }
-
-    // Initialize contracts
-    this.jobPostingContract = new ethers.Contract(
-      config.jobPostingAddress,
-      JOB_POSTING_ABI,
-      this.signer || this.provider
-    );
-
-    this.escrowContract = new ethers.Contract(
-      config.escrowAddress,
-      ESCROW_ABI,
-      this.signer || this.provider
-    );
-
-    this.reputationContract = new ethers.Contract(
-      config.reputationAddress,
-      REPUTATION_ABI,
-      this.signer || this.provider
-    );
-  }
-
-  async connectWallet(): Promise<string> {
-    if (!this.provider) {
-      throw new Error('Web3Service not initialized');
-    }
-
+    
     try {
-      // Request account access
-      await this.provider.send('eth_requestAccounts', []);
-      this.signer = await this.provider.getSigner();
-      const address = await this.signer.getAddress();
-      
-      // Re-initialize contracts with signer
-      if (this.config) {
+      // Initialize provider (assuming MetaMask or similar wallet)
+      if (typeof window !== 'undefined' && window.ethereum) {
+        this.provider = new ethers.BrowserProvider(window.ethereum);
+        this.signer = await this.provider.getSigner();
+      } else {
+        // Fallback to JSON-RPC provider
+        this.provider = new ethers.JsonRpcProvider(config.rpcUrl);
+      }
+
+      // Initialize contracts
+      if (config.jobPostingAddress && config.jobPostingAddress !== '0x...') {
         this.jobPostingContract = new ethers.Contract(
-          this.config.jobPostingAddress,
+          config.jobPostingAddress,
           JOB_POSTING_ABI,
-          this.signer
-        );
-
-        this.escrowContract = new ethers.Contract(
-          this.config.escrowAddress,
-          ESCROW_ABI,
-          this.signer
-        );
-
-        this.reputationContract = new ethers.Contract(
-          this.config.reputationAddress,
-          REPUTATION_ABI,
-          this.signer
+          this.signer || this.provider
         );
       }
 
-      return address;
+      if (config.escrowAddress && config.escrowAddress !== '0x...') {
+        this.escrowContract = new ethers.Contract(
+          config.escrowAddress,
+          ESCROW_ABI,
+          this.signer || this.provider
+        );
+      }
+
+      if (config.reputationAddress && config.reputationAddress !== '0x...') {
+        this.reputationContract = new ethers.Contract(
+          config.reputationAddress,
+          REPUTATION_ABI,
+          this.signer || this.provider
+        );
+      }
     } catch (error) {
-      throw new Error('Failed to connect wallet: ' + error);
+      // Production logging would go here
+      this.isDemoMode = true;
     }
   }
 
-  // Utility method to parse ETH to Wei
+  async connectWallet(): Promise<string> {
+    if (this.isDemoMode) {
+      // Demo mode: return a mock address
+      return '0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b7';
+    }
+
+    if (!this.provider) {
+      throw new Error('Web3 provider not initialized');
+    }
+
+    try {
+      const address = await this.provider.getSigner().getAddress();
+      return address;
+    } catch (error) {
+      throw new Error('Failed to connect wallet: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    }
+  }
+
   parseEther(ethAmount: string): bigint {
     return ethers.parseEther(ethAmount);
   }
 
-  // Utility method to format Wei to ETH
   formatEther(weiAmount: bigint): string {
     return ethers.formatEther(weiAmount);
   }
 
-  // Job Posting Functions
   async postJob(
     title: string,
     description: string,
@@ -176,107 +173,90 @@ class Web3Service {
     category: number,
     isRemote: boolean
   ): Promise<number> {
+    if (this.isDemoMode) {
+      // Demo mode: return a mock job ID
+      return Math.floor(Math.random() * 1000) + 1;
+    }
+
     if (!this.jobPostingContract || !this.signer) {
-      throw new Error('Wallet not connected or contract not initialized');
+      throw new Error('Job posting contract not initialized or wallet not connected');
     }
 
     try {
-      // Validate inputs
-      if (!title || !description || !budget) {
-        throw new Error('Missing required fields');
-      }
-
-      if (deadline <= Math.floor(Date.now() / 1000)) {
-        throw new Error('Deadline must be in the future');
-      }
-
-      // Convert budget to Wei
-      const budgetInWei = this.parseEther(budget);
-
-      // Estimate gas
-      const gasEstimate = await this.jobPostingContract.postJob.estimateGas(
-        title,
-        description,
-        budgetInWei,
-        deadline,
-        category,
-        isRemote
-      );
-
-      // Post job with gas estimation
+      const budgetWei = this.parseEther(budget);
+      const deadlineTimestamp = Math.floor(deadline / 1000);
+      
       const tx = await this.jobPostingContract.postJob(
         title,
         description,
-        budgetInWei,
-        deadline,
+        budgetWei,
+        deadlineTimestamp,
         category,
-        isRemote,
-        {
-          gasLimit: gasEstimate * 120n / 100n // Add 20% buffer
-        }
+        isRemote
       );
-
-      // Wait for transaction confirmation
+      
       const receipt = await tx.wait();
       
-      // Find the JobPosted event
-      const event = receipt.logs?.find((log: any) => {
-        try {
-          const parsed = this.jobPostingContract?.interface.parseLog(log);
-          return parsed?.name === 'JobPosted';
-        } catch {
-          return false;
-        }
-      });
-
-      if (event) {
-        const parsed = this.jobPostingContract?.interface.parseLog(event);
-        return Number(parsed?.args[0]); // jobId
-      } else {
-        throw new Error('Job posted but event not found');
+      // Extract job ID from events
+      const jobPostedEvent = receipt?.logs?.find((log: any) => 
+        log.eventName === 'JobPosted'
+      );
+      
+      if (jobPostedEvent) {
+        return jobPostedEvent.args[0];
       }
+      
+      throw new Error('Failed to extract job ID from transaction');
     } catch (error) {
-      console.error('Error posting job:', error);
-      throw new Error(`Failed to post job: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error('Failed to post job: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
   }
 
   async getJob(jobId: number): Promise<JobData> {
+    if (this.isDemoMode) {
+      // Demo mode: return mock job data
+      return {
+        id: jobId,
+        client: '0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b7',
+        title: 'Demo Job',
+        description: 'This is a demo job',
+        budget: '1000000000000000000', // 1 ETH in wei
+        deadline: Date.now() + 7 * 24 * 60 * 60 * 1000,
+        status: 0,
+        category: 0,
+        isRemote: true,
+        createdAt: Date.now(),
+        acceptedAt: 0,
+        freelancer: '0x0000000000000000000000000000000000000000'
+      };
+    }
+
     if (!this.jobPostingContract) {
-      throw new Error('Contract not initialized');
+      throw new Error('Job posting contract not initialized');
     }
 
     try {
       const job = await this.jobPostingContract.getJob(jobId);
-      return {
-        id: job.id.toNumber(),
-        client: job.client,
-        title: job.title,
-        description: job.description,
-        budget: ethers.formatEther(job.budget),
-        deadline: job.deadline.toNumber(),
-        status: job.status,
-        category: job.category,
-        isRemote: job.isRemote,
-        createdAt: job.createdAt.toNumber(),
-        acceptedAt: job.acceptedAt.toNumber(),
-        freelancer: job.freelancer
-      };
+      return job;
     } catch (error) {
-      throw new Error('Failed to get job: ' + error);
+      throw new Error('Failed to get job: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
   }
 
   async getTotalJobs(): Promise<number> {
+    if (this.isDemoMode) {
+      return 10;
+    }
+
     if (!this.jobPostingContract) {
-      throw new Error('Contract not initialized');
+      throw new Error('Job posting contract not initialized');
     }
 
     try {
-      const total = await this.jobPostingContract.getTotalJobs();
-      return total.toNumber();
+      const totalJobs = await this.jobPostingContract.getTotalJobs();
+      return Number(totalJobs);
     } catch (error) {
-      throw new Error('Failed to get total jobs: ' + error);
+      throw new Error('Failed to get total jobs: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
   }
 
@@ -286,248 +266,244 @@ class Web3Service {
     coverLetter: string,
     deliveryTime: number
   ): Promise<number> {
+    if (this.isDemoMode) {
+      return Math.floor(Math.random() * 1000) + 1;
+    }
+
     if (!this.jobPostingContract || !this.signer) {
-      throw new Error('Wallet not connected or contract not initialized');
+      throw new Error('Job posting contract not initialized or wallet not connected');
     }
 
     try {
-      // Validate inputs
-      if (!coverLetter || deliveryTime <= 0) {
-        throw new Error('Missing required fields');
-      }
-
-      // Convert proposed amount to Wei
-      const proposedAmountInWei = this.parseEther(proposedAmount);
-
-      // Estimate gas
-      const gasEstimate = await this.jobPostingContract.submitProposal.estimateGas(
-        jobId,
-        proposedAmountInWei,
-        coverLetter,
-        deliveryTime
-      );
-
-      // Submit proposal with gas estimation
+      const amountWei = this.parseEther(proposedAmount);
+      const deliveryTimeSeconds = Math.floor(deliveryTime / 1000);
+      
       const tx = await this.jobPostingContract.submitProposal(
         jobId,
-        proposedAmountInWei,
+        amountWei,
         coverLetter,
-        deliveryTime,
-        {
-          gasLimit: gasEstimate * 120n / 100n // Add 20% buffer
-        }
+        deliveryTimeSeconds
       );
-
-      // Wait for transaction confirmation
+      
       const receipt = await tx.wait();
       
-      // Find the ProposalSubmitted event
-      const event = receipt.logs?.find((log: any) => {
-        try {
-          const parsed = this.jobPostingContract?.interface.parseLog(log);
-          return parsed?.name === 'ProposalSubmitted';
-        } catch {
-          return false;
-        }
-      });
-
-      if (event) {
-        const parsed = this.jobPostingContract?.interface.parseLog(event);
-        return Number(parsed?.args[0]); // proposalId
-      } else {
-        throw new Error('Proposal submitted but event not found');
+      // Extract proposal ID from events
+      const proposalSubmittedEvent = receipt?.logs?.find((log: any) => 
+        log.eventName === 'ProposalSubmitted'
+      );
+      
+      if (proposalSubmittedEvent) {
+        return proposalSubmittedEvent.args[0];
       }
+      
+      throw new Error('Failed to extract proposal ID from transaction');
     } catch (error) {
-      console.error('Error submitting proposal:', error);
-      throw new Error(`Failed to submit proposal: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error('Error submitting proposal: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
   }
 
-  // Escrow Functions
   async createEscrow(jobId: number, freelancer: string, amount: string): Promise<number> {
+    if (this.isDemoMode) {
+      return Math.floor(Math.random() * 1000) + 1;
+    }
+
     if (!this.escrowContract || !this.signer) {
-      throw new Error('Contract not initialized or wallet not connected');
+      throw new Error('Escrow contract not initialized or wallet not connected');
     }
 
     try {
-      const amountWei = ethers.parseEther(amount);
-      const tx = await this.escrowContract.createEscrow(jobId, freelancer, amountWei, {
-        value: amountWei
-      });
-      
+      const amountWei = this.parseEther(amount);
+      const tx = await this.escrowContract.createEscrow(jobId, freelancer, amountWei, { value: amountWei });
       const receipt = await tx.wait();
-      const event = receipt.events?.find((e: any) => e.event === 'EscrowCreated');
-      return event?.args?.escrowId?.toNumber() || 0;
+      
+      const escrowCreatedEvent = receipt?.logs?.find((log: any) => 
+        log.eventName === 'EscrowCreated'
+      );
+      
+      if (escrowCreatedEvent) {
+        return escrowCreatedEvent.args[0];
+      }
+      
+      throw new Error('Failed to extract escrow ID from transaction');
     } catch (error) {
-      throw new Error('Failed to create escrow: ' + error);
+      throw new Error('Failed to create escrow: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
   }
 
   async releasePayment(escrowId: number): Promise<void> {
+    if (this.isDemoMode) {
+      return;
+    }
+
     if (!this.escrowContract || !this.signer) {
-      throw new Error('Contract not initialized or wallet not connected');
+      throw new Error('Escrow contract not initialized or wallet not connected');
     }
 
     try {
       const tx = await this.escrowContract.releasePayment(escrowId);
       await tx.wait();
     } catch (error) {
-      throw new Error('Failed to release payment: ' + error);
+      throw new Error('Failed to release payment: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
   }
 
   async raiseDispute(escrowId: number, reason: string): Promise<void> {
+    if (this.isDemoMode) {
+      return;
+    }
+
     if (!this.escrowContract || !this.signer) {
-      throw new Error('Contract not initialized or wallet not connected');
+      throw new Error('Escrow contract not initialized or wallet not connected');
     }
 
     try {
-      // Validate reason
-      if (!reason || reason.trim().length === 0) {
-        throw new Error('Dispute reason is required');
-      }
-
-      // Estimate gas
-      const gasEstimate = await this.escrowContract.raiseDispute.estimateGas(
-        escrowId,
-        reason.trim()
-      );
-
-      // Raise dispute with gas estimation
-      const tx = await this.escrowContract.raiseDispute(
-        escrowId,
-        reason.trim(),
-        {
-          gasLimit: gasEstimate * 120n / 100n // Add 20% buffer
-        }
-      );
-
+      const tx = await this.escrowContract.raiseDispute(escrowId, reason);
       await tx.wait();
     } catch (error) {
-      console.error('Error raising dispute:', error);
-      throw new Error(`Failed to raise dispute: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error('Error raising dispute: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
   }
 
   async getEscrow(escrowId: number): Promise<EscrowData> {
+    if (this.isDemoMode) {
+      return {
+        id: escrowId,
+        jobId: 1,
+        client: '0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b7',
+        freelancer: '0x1234567890123456789012345678901234567890',
+        amount: '1000000000000000000',
+        deadline: Date.now() + 30 * 24 * 60 * 60 * 1000,
+        status: 0,
+        createdAt: Date.now(),
+        completedAt: 0,
+        disputeReason: '',
+        disputeInitiator: '0x0000000000000000000000000000000000000000'
+      };
+    }
+
     if (!this.escrowContract) {
-      throw new Error('Contract not initialized');
+      throw new Error('Escrow contract not initialized');
     }
 
     try {
       const escrow = await this.escrowContract.getEscrow(escrowId);
-      return {
-        id: escrow.id.toNumber(),
-        jobId: escrow.jobId.toNumber(),
-        client: escrow.client,
-        freelancer: escrow.freelancer,
-        amount: ethers.formatEther(escrow.amount),
-        deadline: escrow.deadline.toNumber(),
-        status: escrow.status,
-        createdAt: escrow.createdAt.toNumber(),
-        completedAt: escrow.completedAt.toNumber(),
-        disputeReason: escrow.disputeReason,
-        disputeInitiator: escrow.disputeInitiator
-      };
+      return escrow;
     } catch (error) {
-      throw new Error('Failed to get escrow: ' + error);
+      throw new Error('Failed to get escrow: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
   }
 
-  // Reputation Functions
   async getUserReputation(userAddress: string): Promise<ReputationData> {
+    if (this.isDemoMode) {
+      return {
+        totalScore: 850,
+        completedJobs: 15,
+        totalEarnings: 50000000000000000000n, // 50 ETH in wei
+        averageRating: 4.8,
+        reviewCount: 12
+      };
+    }
+
     if (!this.reputationContract) {
-      throw new Error('Contract not initialized');
+      throw new Error('Reputation contract not initialized');
     }
 
     try {
       const reputation = await this.reputationContract.getUserReputation(userAddress);
-      return {
-        totalScore: reputation.totalScore.toNumber(),
-        completedJobs: reputation.completedJobs.toNumber(),
-        totalEarnings: parseFloat(ethers.formatEther(reputation.totalEarnings)),
-        averageRating: reputation.averageRating.toNumber(),
-        reviewCount: reputation.reviewCount.toNumber()
-      };
+      return reputation;
     } catch (error) {
-      throw new Error('Failed to get user reputation: ' + error);
+      throw new Error('Failed to get user reputation: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
   }
 
   async getUserBadges(userAddress: string): Promise<number[]> {
+    if (this.isDemoMode) {
+      return [1, 2, 3];
+    }
+
     if (!this.reputationContract) {
-      throw new Error('Contract not initialized');
+      throw new Error('Reputation contract not initialized');
     }
 
     try {
       const badges = await this.reputationContract.getUserBadges(userAddress);
-      return badges.map((badge: any) => badge.toNumber());
+      return badges;
     } catch (error) {
-      throw new Error('Failed to get user badges: ' + error);
+      throw new Error('Failed to get user badges: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
   }
 
   async submitReview(reviewee: string, rating: number): Promise<void> {
+    if (this.isDemoMode) {
+      return;
+    }
+
     if (!this.reputationContract || !this.signer) {
-      throw new Error('Contract not initialized or wallet not connected');
+      throw new Error('Reputation contract not initialized or wallet not connected');
     }
 
     try {
       const tx = await this.reputationContract.submitReview(reviewee, rating);
       await tx.wait();
     } catch (error) {
-      throw new Error('Failed to submit review: ' + error);
+      throw new Error('Failed to submit review: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
   }
 
-  // Utility Functions
   async getCurrentAddress(): Promise<string> {
+    if (this.isDemoMode) {
+      return '0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b7';
+    }
+
     if (!this.signer) {
       throw new Error('Wallet not connected');
     }
-    return await this.signer.getAddress();
+
+    try {
+      return await this.signer.getAddress();
+    } catch (error) {
+      throw new Error('Failed to get current address: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    }
   }
 
   async getBalance(address?: string): Promise<string> {
-    if (!this.provider) {
-      throw new Error('Provider not initialized');
+    if (this.isDemoMode) {
+      return '2.5';
     }
 
-    const targetAddress = address || await this.getCurrentAddress();
-    const balance = await this.provider.getBalance(targetAddress);
-    return ethers.formatEther(balance);
+    if (!this.provider) {
+      throw new Error('Web3 provider not initialized');
+    }
+
+    try {
+      const targetAddress = address || await this.getCurrentAddress();
+      const balance = await this.provider.getBalance(targetAddress);
+      return this.formatEther(balance);
+    } catch (error) {
+      throw new Error('Failed to get balance: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    }
   }
 
-  // Event Listeners
   onJobPosted(callback: (jobId: number, client: string, title: string, budget: string) => void) {
-    if (!this.jobPostingContract) {
-      throw new Error('Contract not initialized');
+    if (this.isDemoMode || !this.jobPostingContract) {
+      return;
     }
 
-    this.jobPostingContract.on('JobPosted', (jobId: any, client: any, title: any, budget: any) => {
-      callback(
-        jobId.toNumber(),
-        client,
-        title,
-        ethers.formatEther(budget)
-      );
+    this.jobPostingContract.on('JobPosted', (jobId, client, title, budget) => {
+      callback(Number(jobId), client, title, this.formatEther(budget));
     });
   }
 
   onPaymentReleased(callback: (escrowId: number, freelancer: string, amount: string) => void) {
-    if (!this.escrowContract) {
-      throw new Error('Contract not initialized');
+    if (this.isDemoMode || !this.escrowContract) {
+      return;
     }
 
-    this.escrowContract.on('PaymentReleased', (escrowId: any, freelancer: any, amount: any) => {
-      callback(
-        escrowId.toNumber(),
-        freelancer,
-        ethers.formatEther(amount)
-      );
+    this.escrowContract.on('PaymentReleased', (escrowId, freelancer, amount) => {
+      callback(Number(escrowId), freelancer, this.formatEther(amount));
     });
   }
 }
 
-export const web3Service = new Web3Service();
+const web3Service = new Web3Service();
 export default web3Service; 

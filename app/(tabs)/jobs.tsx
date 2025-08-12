@@ -82,11 +82,28 @@ export default function JobsScreen() {
       setJobs(blockchainJobs);
       setFilteredJobs(blockchainJobs);
     } catch (error) {
-      console.error('Failed to load jobs:', error);
       Alert.alert('Error', 'Failed to load jobs. Please try again.');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleJobPosted = (jobId: number) => {
+    // Job posted successfully - could refresh the job list or show a success message
+    setShowJobForm(false);
+    loadJobs(); // Refresh the job list
+  };
+
+  const handleProposalSubmitted = (proposalId: number) => {
+    // Proposal submitted successfully
+    setShowProposalForm(false);
+    Alert.alert('Success', 'Proposal submitted successfully!');
+  };
+
+  const handlePaymentProcessed = () => {
+    // Payment processed successfully
+    setShowPaymentProcessor(false);
+    Alert.alert('Success', 'Payment processed successfully!');
   };
 
   const filterJobs = (filter: 'all' | 'my-jobs' | 'available') => {
@@ -96,10 +113,10 @@ export default function JobsScreen() {
     
     switch (filter) {
       case 'my-jobs':
-        filtered = jobs.filter(job => job.client === walletAddress);
+        filtered = jobs.filter(job => job.status === 'accepted' || job.status === 'in_progress');
         break;
       case 'available':
-        filtered = jobs.filter(job => job.status === 'open' && job.client !== walletAddress);
+        filtered = jobs.filter(job => job.status === 'posted');
         break;
       default:
         filtered = jobs;
@@ -108,59 +125,9 @@ export default function JobsScreen() {
     setFilteredJobs(filtered);
   };
 
-  const handleJobPosted = (jobId: number) => {
-    console.log('Job posted successfully with ID:', jobId);
-    loadJobs(); // Refresh job list
-  };
-
-  const handleProposalSubmitted = (proposalId: number) => {
-    console.log('Proposal submitted successfully with ID:', proposalId);
-    Alert.alert('Success', 'Your proposal has been submitted successfully!');
-  };
-
-  const handlePaymentProcessed = () => {
-    console.log('Payment processed successfully');
-    loadJobs(); // Refresh job list
-  };
-
-  const openProposalForm = (job: Job) => {
-    if (!isConnected) {
-      Alert.alert('Wallet Required', 'Please connect your wallet to submit a proposal.');
-      return;
-    }
-    
+  const handleJobPress = (job: Job) => {
     setSelectedJob(job);
     setShowProposalForm(true);
-  };
-
-  const openPaymentProcessor = (job: Job) => {
-    // Mock payment data - in production, fetch from blockchain
-    const paymentData = {
-      escrowId: 1,
-      jobId: job.id,
-      amount: job.budget,
-      freelancer: '0x1234...5678',
-      client: job.client,
-      status: 'pending' as const
-    };
-    
-    setSelectedPayment(paymentData);
-    setShowPaymentProcessor(true);
-  };
-
-  const formatDeadline = (deadline: number) => {
-    const days = Math.ceil((deadline - Date.now()) / (1000 * 60 * 60 * 24));
-    return `${days} days left`;
-  };
-
-  const getCategoryIcon = (category: number) => {
-    const icons = ['🎨', '💻', '✍️', '📢', '🔧'];
-    return icons[category] || '🔧';
-  };
-
-  const getCategoryName = (category: number) => {
-    const names = ['Design', 'Development', 'Writing', 'Marketing', 'Other'];
-    return names[category] || 'Other';
   };
 
   return (
@@ -173,169 +140,146 @@ export default function JobsScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <Text style={[styles.title, { color: colors.text }]}>Jobs</Text>
+          <Text style={[styles.title, { color: colors.text }]}>Browse Jobs</Text>
           <TouchableOpacity
             style={[styles.postButton, { backgroundColor: colors.primary }]}
             onPress={() => setShowJobForm(true)}
-            disabled={!isConnected}
           >
             <Plus size={20} color="#fff" />
             <Text style={styles.postButtonText}>Post Job</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Search and Filters */}
-        <View style={styles.searchContainer}>
-          <View style={[styles.searchBar, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Search size={20} color={colors.textSecondary} />
-            <Text style={[styles.searchPlaceholder, { color: colors.textSecondary }]}>
-              Search jobs...
+        {/* Filters */}
+        <View style={styles.filterContainer}>
+          <TouchableOpacity
+            style={[
+              styles.filterButton,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+              activeFilter === 'all' && { backgroundColor: colors.primary }
+            ]}
+            onPress={() => filterJobs('all')}
+          >
+            <Text style={[
+              styles.filterText,
+              { color: activeFilter === 'all' ? '#fff' : colors.text }
+            ]}>
+              All Jobs
             </Text>
-          </View>
+          </TouchableOpacity>
           
-          <TouchableOpacity style={[styles.filterButton, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Filter size={20} color={colors.text} />
+          <TouchableOpacity
+            style={[
+              styles.filterButton,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+              activeFilter === 'available' && { backgroundColor: colors.primary }
+            ]}
+            onPress={() => filterJobs('available')}
+          >
+            <Text style={[
+              styles.filterText,
+              { color: activeFilter === 'available' ? '#fff' : colors.text }
+            ]}>
+              Available
+            </Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={[
+              styles.filterButton,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+              activeFilter === 'my-jobs' && { backgroundColor: colors.primary }
+            ]}
+            onPress={() => filterJobs('my-jobs')}
+          >
+            <Text style={[
+              styles.filterText,
+              { color: activeFilter === 'my-jobs' ? '#fff' : colors.text }
+            ]}>
+              My Jobs
+            </Text>
           </TouchableOpacity>
         </View>
 
-        {/* Filter Tabs */}
-        <View style={styles.filterTabs}>
-          {[
-            { key: 'all', label: 'All Jobs' },
-            { key: 'my-jobs', label: 'My Jobs' },
-            { key: 'available', label: 'Available' }
-          ].map((filter) => (
-            <TouchableOpacity
-              key={filter.key}
-              style={[
-                styles.filterTab,
-                { backgroundColor: colors.surface, borderColor: colors.border },
-                activeFilter === filter.key && { backgroundColor: colors.primary }
-              ]}
-              onPress={() => filterJobs(filter.key as any)}
-            >
-              <Text style={[
-                styles.filterTabText,
-                { color: activeFilter === filter.key ? '#fff' : colors.text }
-              ]}>
-                {filter.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
         {/* Jobs List */}
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
-              Loading jobs...
-            </Text>
-          </View>
-        ) : filteredJobs.length > 0 ? (
-          <View style={styles.jobsList}>
-            {filteredJobs.map((job) => (
-              <View key={job.id} style={[styles.jobCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={styles.jobsContainer}>
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+                Loading jobs...
+              </Text>
+            </View>
+          ) : filteredJobs.length > 0 ? (
+            filteredJobs.map((job) => (
+              <TouchableOpacity
+                key={job.id}
+                onPress={() => handleJobPress(job)}
+                style={[styles.jobCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+              >
                 <View style={styles.jobHeader}>
-                  <View style={styles.jobTitleContainer}>
-                    <Text style={styles.categoryIcon}>{getCategoryIcon(job.category)}</Text>
-                    <Text style={[styles.jobTitle, { color: colors.text }]}>{job.title}</Text>
-                  </View>
-                  <View style={[styles.statusBadge, { 
-                    backgroundColor: job.status === 'open' ? colors.success + '20' : colors.warning + '20',
-                    borderColor: job.status === 'open' ? colors.success : colors.warning
-                  }]}>
-                    <Text style={[styles.statusText, { 
-                      color: job.status === 'open' ? colors.success : colors.warning 
-                    }]}>
-                      {job.status}
+                  <Text style={[styles.jobTitle, { color: colors.text }]}>{job.title}</Text>
+                  <View style={[styles.budgetBadge, { backgroundColor: colors.success + '20' }]}>
+                    <DollarSign size={16} color={colors.success} />
+                    <Text style={[styles.budgetText, { color: colors.success }]}>
+                      ${parseInt(job.budget).toLocaleString()}
                     </Text>
                   </View>
                 </View>
-
+                
                 <Text style={[styles.jobDescription, { color: colors.textSecondary }]} numberOfLines={2}>
                   {job.description}
                 </Text>
-
+                
                 <View style={styles.jobDetails}>
-                  <View style={styles.jobDetail}>
-                    <DollarSign size={16} color={colors.primary} />
-                    <Text style={[styles.jobDetailText, { color: colors.text }]}>
-                      {job.budget} ETH
+                  <View style={styles.detailItem}>
+                    <Clock size={14} color={colors.textSecondary} />
+                    <Text style={[styles.detailText, { color: colors.textSecondary }]}>
+                      {new Date(job.deadline).toLocaleDateString()}
                     </Text>
                   </View>
                   
-                  <View style={styles.jobDetail}>
-                    <Clock size={16} color={colors.textSecondary} />
-                    <Text style={[styles.jobDetailText, { color: colors.textSecondary }]}>
-                      {formatDeadline(job.deadline)}
+                  <View style={styles.detailItem}>
+                    <MapPin size={14} color={colors.textSecondary} />
+                    <Text style={[styles.detailText, { color: colors.textSecondary }]}>
+                      {job.isRemote ? 'Remote' : 'On-site'}
                     </Text>
                   </View>
                   
-                  {job.isRemote && (
-                    <View style={styles.jobDetail}>
-                      <MapPin size={16} color={colors.textSecondary} />
-                      <Text style={[styles.jobDetailText, { color: colors.textSecondary }]}>
-                        Remote
-                      </Text>
-                    </View>
-                  )}
-                </View>
-
-                <View style={styles.jobFooter}>
-                  <View style={styles.jobMeta}>
+                  <View style={styles.detailItem}>
                     <User size={14} color={colors.textSecondary} />
-                    <Text style={[styles.jobMetaText, { color: colors.textSecondary }]}>
-                      {job.client.slice(0, 6)}...{job.client.slice(-4)}
+                    <Text style={[styles.detailText, { color: colors.textSecondary }]}>
+                      {job.proposals || 0} proposals
                     </Text>
-                    {job.proposals && (
-                      <>
-                        <Text style={[styles.jobMetaText, { color: colors.textSecondary }]}>•</Text>
-                        <Text style={[styles.jobMetaText, { color: colors.textSecondary }]}>
-                          {job.proposals} proposals
-                        </Text>
-                      </>
-                    )}
-                  </View>
-
-                  <View style={styles.jobActions}>
-                    {job.client === walletAddress ? (
-                      // Client actions
-                      <TouchableOpacity
-                        style={[styles.actionButton, { backgroundColor: colors.primary }]}
-                        onPress={() => openPaymentProcessor(job)}
-                      >
-                        <Eye size={16} color="#fff" />
-                        <Text style={styles.actionButtonText}>Manage</Text>
-                      </TouchableOpacity>
-                    ) : (
-                      // Freelancer actions
-                      <TouchableOpacity
-                        style={[styles.actionButton, { backgroundColor: colors.primary }]}
-                        onPress={() => openProposalForm(job)}
-                      >
-                        <Briefcase size={16} color="#fff" />
-                        <Text style={styles.actionButtonText}>Apply</Text>
-                      </TouchableOpacity>
-                    )}
                   </View>
                 </View>
-              </View>
-            ))}
-          </View>
-        ) : (
-          <View style={[styles.emptyState, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Briefcase size={48} color={colors.textSecondary} />
-            <Text style={[styles.emptyTitle, { color: colors.text }]}>No Jobs Found</Text>
-            <Text style={[styles.emptyDescription, { color: colors.textSecondary }]}>
-              {activeFilter === 'my-jobs' 
-                ? 'You haven\'t posted any jobs yet'
-                : activeFilter === 'available'
-                ? 'No available jobs match your criteria'
-                : 'No jobs available at the moment'
-              }
-            </Text>
-          </View>
-        )}
+                
+                <View style={styles.jobFooter}>
+                  <Text style={[styles.clientText, { color: colors.textSecondary }]}>
+                    by {job.client}
+                  </Text>
+                  <TouchableOpacity
+                    style={[styles.viewButton, { backgroundColor: colors.primary }]}
+                    onPress={() => handleJobPress(job)}
+                  >
+                    <Eye size={16} color="#fff" />
+                    <Text style={styles.viewButtonText}>View</Text>
+                  </TouchableOpacity>
+                </View>
+              </TouchableOpacity>
+            ))
+          ) : (
+            <View style={styles.emptyContainer}>
+              <Briefcase size={48} color={colors.textSecondary} />
+              <Text style={[styles.emptyTitle, { color: colors.text }]}>No Jobs Found</Text>
+              <Text style={[styles.emptyDescription, { color: colors.textSecondary }]}>
+                {activeFilter === 'my-jobs' 
+                  ? 'You don\'t have any active jobs yet.'
+                  : 'No jobs match your current filters.'
+                }
+              </Text>
+            </View>
+          )}
+        </View>
       </ScrollView>
 
       {/* Modals */}
@@ -345,30 +289,27 @@ export default function JobsScreen() {
         onSuccess={handleJobPosted}
       />
 
-      {selectedJob && (
-        <ProposalForm
-          visible={showProposalForm}
-          onClose={() => setShowProposalForm(false)}
-          onSuccess={handleProposalSubmitted}
-          jobId={selectedJob.id}
-          jobTitle={selectedJob.title}
-          jobBudget={selectedJob.budget}
-        />
-      )}
+      <ProposalForm
+        visible={showProposalForm}
+        onClose={() => setShowProposalForm(false)}
+        onSuccess={handleProposalSubmitted}
+        jobId={selectedJob?.id || 0}
+        jobTitle={selectedJob?.title || ''}
+        jobBudget={selectedJob?.budget || '0'}
+      />
 
-      {selectedPayment && (
-        <PaymentProcessor
-          visible={showPaymentProcessor}
-          onClose={() => setShowPaymentProcessor(false)}
-          onSuccess={handlePaymentProcessed}
-          escrowId={selectedPayment.escrowId}
-          jobId={selectedPayment.jobId}
-          amount={selectedPayment.amount}
-          freelancer={selectedPayment.freelancer}
-          client={selectedPayment.client}
-          status={selectedPayment.status}
-        />
-      )}
+      {/* Payment Processor - only show when there's valid payment data */}
+      <PaymentProcessor
+        visible={showPaymentProcessor}
+        onClose={() => setShowPaymentProcessor(false)}
+        onSuccess={handlePaymentProcessed}
+        escrowId={selectedPayment?.escrowId}
+        jobId={selectedPayment?.jobId}
+        amount={selectedPayment?.amount}
+        freelancer={selectedPayment?.freelancer}
+        client={selectedPayment?.client}
+        status={selectedPayment?.status}
+      />
     </SafeAreaView>
   );
 }
@@ -384,7 +325,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 24,
   },
   title: {
     fontSize: 28,
@@ -393,55 +334,35 @@ const styles = StyleSheet.create({
   postButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
+    paddingVertical: 12,
     paddingHorizontal: 16,
-    paddingVertical: 8,
     borderRadius: 8,
-    gap: 6,
   },
   postButtonText: {
-    color: '#fff',
     fontSize: 14,
     fontWeight: '600',
+    color: '#fff',
   },
-  searchContainer: {
+  filterContainer: {
     flexDirection: 'row',
-    gap: 12,
-    marginBottom: 20,
-  },
-  searchBar: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    borderRadius: 8,
-    borderWidth: 1,
     gap: 8,
-  },
-  searchPlaceholder: {
-    fontSize: 16,
+    marginBottom: 24,
   },
   filterButton: {
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  filterTabs: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 20,
-  },
-  filterTab: {
     flex: 1,
     paddingVertical: 8,
     paddingHorizontal: 12,
-    borderRadius: 8,
+    borderRadius: 6,
     borderWidth: 1,
     alignItems: 'center',
   },
-  filterTabText: {
-    fontSize: 14,
+  filterText: {
+    fontSize: 12,
     fontWeight: '600',
+  },
+  jobsContainer: {
+    gap: 16,
   },
   loadingContainer: {
     padding: 40,
@@ -449,9 +370,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 16,
-  },
-  jobsList: {
-    gap: 16,
+    fontWeight: '500',
   },
   jobCard: {
     padding: 16,
@@ -462,32 +381,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  jobTitleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    gap: 8,
-  },
-  categoryIcon: {
-    fontSize: 20,
+    marginBottom: 8,
   },
   jobTitle: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '600',
     flex: 1,
+    marginRight: 12,
   },
-  statusBadge: {
+  budgetBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
+    borderRadius: 6,
   },
-  statusText: {
+  budgetText: {
     fontSize: 12,
     fontWeight: '600',
-    textTransform: 'uppercase',
   },
   jobDescription: {
     fontSize: 14,
@@ -499,12 +411,12 @@ const styles = StyleSheet.create({
     gap: 16,
     marginBottom: 12,
   },
-  jobDetail: {
+  detailItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
   },
-  jobDetailText: {
+  detailText: {
     fontSize: 12,
   },
   jobFooter: {
@@ -512,40 +424,29 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  jobMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  jobMetaText: {
+  clientText: {
     fontSize: 12,
   },
-  jobActions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  actionButton: {
+  viewButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
     gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 6,
   },
-  actionButtonText: {
-    color: '#fff',
+  viewButtonText: {
     fontSize: 12,
     fontWeight: '600',
+    color: '#fff',
   },
-  emptyState: {
+  emptyContainer: {
     padding: 40,
-    borderRadius: 12,
-    borderWidth: 1,
     alignItems: 'center',
   },
   emptyTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '600',
     marginTop: 16,
     marginBottom: 8,
   },

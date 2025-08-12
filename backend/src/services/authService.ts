@@ -524,60 +524,72 @@ export class AuthService {
 
   // Send verification email
   private async sendVerificationEmail(user: User, token: string): Promise<void> {
-    const verificationUrl = `${config.frontendUrl}/verify-email?token=${token}`;
-    
-    const emailContent = `
-      <h2>Welcome to Lancerscape2!</h2>
-      <p>Hi ${user.firstName},</p>
-      <p>Thank you for registering with Lancerscape2. Please verify your email address by clicking the link below:</p>
-      <a href="${verificationUrl}" style="background-color: #007AFF; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
-        Verify Email Address
-      </a>
-      <p>This link will expire in 24 hours.</p>
-      <p>If you didn't create an account, you can safely ignore this email.</p>
-      <p>Best regards,<br>The Lancerscape2 Team</p>
-    `;
+    try {
+      const verificationUrl = `${config.frontendUrl}/verify-email?token=${token}`;
+      
+      const emailContent = `
+        <h2>Welcome to Lancerscape2!</h2>
+        <p>Hi ${user.firstName},</p>
+        <p>Thank you for registering with Lancerscape2. Please verify your email address by clicking the link below:</p>
+        <a href="${verificationUrl}" style="background-color: #007AFF; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+          Verify Email Address
+        </a>
+        <p>This link will expire in 24 hours.</p>
+        <p>If you didn't create an account, you can safely ignore this email.</p>
+        <p>Best regards,<br>The Lancerscape2 Team</p>
+      `;
 
-    await sendEmail(user.email, 'Verify Your Email Address', emailContent);
+      await sendEmail(user.email, 'Verify Your Email Address', emailContent);
+    } catch (error) {
+      logger.warn('Failed to send verification email (continuing):', error);
+    }
   }
 
   // Send welcome email
   private async sendWelcomeEmail(user: User): Promise<void> {
-    const emailContent = `
-      <h2>Welcome to Lancerscape2!</h2>
-      <p>Hi ${user.firstName},</p>
-      <p>Welcome to Lancerscape2! We're excited to have you on board.</p>
-      <p>Here's what you can do next:</p>
-      <ul>
-        <li>Complete your profile</li>
-        <li>Browse available jobs</li>
-        <li>Connect your wallet</li>
-        <li>Start earning or hiring</li>
-      </ul>
-      <p>If you have any questions, feel free to reach out to our support team.</p>
-      <p>Best regards,<br>The Lancerscape2 Team</p>
-    `;
+    try {
+      const emailContent = `
+        <h2>Welcome to Lancerscape2!</h2>
+        <p>Hi ${user.firstName},</p>
+        <p>Welcome to Lancerscape2! We're excited to have you on board.</p>
+        <p>Here's what you can do next:</p>
+        <ul>
+          <li>Complete your profile</li>
+          <li>Browse available jobs</li>
+          <li>Connect your wallet</li>
+          <li>Start earning or hiring</li>
+        </ul>
+        <p>If you have any questions, feel free to reach out to our support team.</p>
+        <p>Best regards,<br>The Lancerscape2 Team</p>
+      `;
 
-    await sendEmail(user.email, 'Welcome to Lancerscape2!', emailContent);
+      await sendEmail(user.email, 'Welcome to Lancerscape2!', emailContent);
+    } catch (error) {
+      logger.warn('Failed to send welcome email (continuing):', error);
+    }
   }
 
   // Send password reset email
   private async sendPasswordResetEmail(user: User, token: string): Promise<void> {
-    const resetUrl = `${config.frontendUrl}/reset-password?token=${token}`;
-    
-    const emailContent = `
-      <h2>Password Reset Request</h2>
-      <p>Hi ${user.firstName},</p>
-      <p>We received a request to reset your password. Click the link below to create a new password:</p>
-      <a href="${resetUrl}" style="background-color: #007AFF; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
-        Reset Password
-      </a>
-      <p>This link will expire in 1 hour.</p>
-      <p>If you didn't request a password reset, you can safely ignore this email.</p>
-      <p>Best regards,<br>The Lancerscape2 Team</p>
-    `;
+    try {
+      const resetUrl = `${config.frontendUrl}/reset-password?token=${token}`;
+      
+      const emailContent = `
+        <h2>Password Reset Request</h2>
+        <p>Hi ${user.firstName},</p>
+        <p>We received a request to reset your password. Click the link below to create a new password:</p>
+        <a href="${resetUrl}" style="background-color: #007AFF; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+          Reset Password
+        </a>
+        <p>This link will expire in 1 hour.</p>
+        <p>If you didn't request a password reset, you can safely ignore this email.</p>
+        <p>Best regards,<br>The Lancerscape2 Team</p>
+      `;
 
-    await sendEmail(user.email, 'Reset Your Password', emailContent);
+      await sendEmail(user.email, 'Reset Your Password', emailContent);
+    } catch (error) {
+      logger.warn('Failed to send password reset email (continuing):', error);
+    }
   }
 
   // Log login

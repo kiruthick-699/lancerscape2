@@ -172,69 +172,70 @@ export class User extends Model implements UserAttributes {
   };
 
   static get relationMappings() {
-    const { Job } = require('./Job');
-    const { Proposal } = require('./Proposal');
-    const { Message } = require('./Message');
-    const { Notification } = require('./Notification');
-    const { Review } = require('./Review');
+    // Commented out for now - models will be created later
+    // const { Job } = require('./Job');
+    // const { Proposal } = require('./Proposal');
+    // const { Message } = require('./Message');
+    // const { Notification } = require('./Notification');
+    // const { Review } = require('./Review');
 
     return {
-      jobs: {
-        relation: Model.HasManyRelation,
-        modelClass: Job,
-        join: {
-          from: 'users.id',
-          to: 'jobs.clientId'
-        }
-      },
-      proposals: {
-        relation: Model.HasManyRelation,
-        modelClass: Proposal,
-        join: {
-          from: 'users.id',
-          to: 'proposals.freelancerId'
-        }
-      },
-      sentMessages: {
-        relation: Model.HasManyRelation,
-        modelClass: Message,
-        join: {
-          from: 'users.id',
-          to: 'messages.senderId'
-        }
-      },
-      receivedMessages: {
-        relation: Model.HasManyRelation,
-        modelClass: Message,
-        join: {
-          from: 'users.id',
-          to: 'messages.recipientId'
-        }
-      },
-      notifications: {
-        relation: Model.HasManyRelation,
-        modelClass: Notification,
-        join: {
-          from: 'users.id',
-          to: 'notifications.userId'
-        }
-      },
-      reviews: {
-        relation: Model.HasManyRelation,
-        modelClass: Review,
-        join: {
-          from: 'users.id',
-          to: 'reviews.reviewerId'
-        }
-      },
-      receivedReviews: {
-        relation: Model.HasManyRelation,
-        modelClass: Review,
-        join: {
-          from: 'users.id',
-          to: 'reviews.revieweeId'
-        }
-      }
+      // jobs: {
+      //   relation: Model.HasManyRelation,
+      //   modelClass: Job,
+      //   join: {
+      //     from: 'users.id',
+      //     to: 'jobs.clientId'
+      //   }
+      // },
+      // proposals: {
+      //   relation: Model.HasManyRelation,
+      //   modelClass: Proposal,
+      //   join: {
+      //     from: 'users.id',
+      //     to: 'proposals.freelancerId'
+      //   }
+      // },
+      // sentMessages: {
+      //   relation: Model.HasManyRelation,
+      //   modelClass: Message,
+      //   join: {
+      //     from: 'users.id',
+      //     to: 'messages.senderId'
+      //   }
+      // },
+      // receivedMessages: {
+      //   relation: Model.HasManyRelation,
+      //   modelClass: Message,
+      //   join: {
+      //     from: 'users.id',
+      //     to: 'messages.recipientId'
+      //   }
+      // },
+      // notifications: {
+      //   relation: Model.HasManyRelation,
+      //   modelClass: Notification,
+      //   join: {
+      //     from: 'users.id',
+      //     to: 'notifications.userId'
+      //   }
+      // },
+      // reviews: {
+      //   relation: Model.HasManyRelation,
+      //   modelClass: Review,
+      //   join: {
+      //     from: 'users.id',
+      //     to: 'reviews.reviewerId'
+      //   }
+      // },
+      // receivedReviews: {
+      //   relation: Model.HasManyRelation,
+      //   modelClass: Review,
+      //   join: {
+      //     from: 'users.id',
+      //     to: 'reviews.revieweeId'
+      //   }
+      // }
     };
   }
 
@@ -314,8 +315,9 @@ export class User extends Model implements UserAttributes {
 
   // Update last active
   async updateLastActive(): Promise<void> {
-    this.lastActive = new Date();
-    await this.$query().patch({ lastActive: this.lastActive });
+    const now = new Date();
+    this.lastActive = now;
+    await this.$query().patch({ lastActive: now.toISOString() as any });
   }
 
   // Update reputation

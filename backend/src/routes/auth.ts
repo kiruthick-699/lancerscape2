@@ -2,16 +2,27 @@ import { Router, Request, Response } from 'express';
 import { authService } from '../services/authService';
 import { rateLimit } from 'express-rate-limit';
 import { logger } from '../utils/logger';
+import { validate, schemas } from '../utils/validation';
+import { authenticateToken, requireRole, userRateLimit } from '../middleware/authMiddleware';
+import { securityLogger } from '../utils/logger';
 
 const router = Router();
 
-// Rate limiting for auth endpoints
+// Enhanced rate limiting for auth endpoints
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 5, // limit each IP to 5 requests per windowMs
   message: 'Too many authentication attempts, please try again later',
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => {
+    // Skip rate limiting for health checks and metrics
+    return req.path === '/health' || req.path === '/metrics';
+  },
+  keyGenerator: (req) => {
+    // Use client ID if available, otherwise use IP
+    return req.headers['x-client-id'] as string || req.ip;
+  }
 });
 
 const registerLimiter = rateLimit({
@@ -20,52 +31,46 @@ const registerLimiter = rateLimit({
   message: 'Too many registration attempts, please try again later',
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: (req) => {
+    return req.headers['x-client-id'] as string || req.ip;
+  }
 });
 
 // Register new user
 router.post('/register', registerLimiter, async (req: Request, res: Response) => {
   try {
-    const {
-      email,
-      username,
-      firstName,
-      lastName,
-      password,
-      phone,
-      userType,
-      walletAddress,
-      metadata
-    } = req.body;
+    // Validate input using Joi schema
+    const validatedData = validate(schemas.user.register, req.body);
 
-    // Validate required fields
-    if (!email || !username || !firstName || !lastName || !password || !userType) {
-      return res.status(400).json({
-        success: false,
-        message: 'Missing required fields'
-      });
-    }
+    // Check for suspicious registration patterns
+    const clientId = req.headers['x-client-id'] as string;
+    const userAgent = req.get('User-Agent');
+    const ip = req.ip;
 
-    // Validate user type
-    if (!['client', 'freelancer'].includes(userType)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid user type'
-      });
-    }
-
-    const result = await authService.register({
-      email,
-      username,
-      firstName,
-      lastName,
-      password,
-      userType,
-      phone,
-      walletAddress,
-      metadata
+    // Log registration attempt
+    logger.info('Registration attempt', {
+      email: validatedData.email,
+      username: validatedData.username,
+      userType: validatedData.userType,
+      ip,
+      userAgent,
+      clientId,
+      timestamp: new Date().toISOString()
     });
 
-    res.status(201).json({
+    const result = await authService.register(validatedData);
+
+    // Log successful registration
+    securityLogger.suspiciousActivity('user_registered', {
+      ip,
+      userAgent,
+      clientId,
+      userId: result.user.id,
+      email: result.user.email,
+      userType: result.user.userType
+    });
+
+    return res.status(201).json({
       success: true,
       message: 'Registration successful. Please check your email to verify your account.',
       data: {
@@ -84,9 +89,15 @@ router.post('/register', registerLimiter, async (req: Request, res: Response) =>
     });
   } catch (error) {
     logger.error('Registration error:', error);
-    res.status(400).json({
+    
+    // Don't expose internal error details in production
+    const message = process.env.NODE_ENV === 'production' 
+      ? 'Registration failed. Please check your input and try again.'
+      : error instanceof Error ? error.message : 'Registration failed';
+    
+    return res.status(400).json({
       success: false,
-      message: error instanceof Error ? error.message : 'Registration failed'
+      message
     });
   }
 });
@@ -94,18 +105,28 @@ router.post('/register', registerLimiter, async (req: Request, res: Response) =>
 // Login user
 router.post('/login', authLimiter, async (req: Request, res: Response) => {
   try {
-    const { email, password } = req.body;
+    // Validate input using Joi schema
+    const validatedData = validate(schemas.user.login, req.body);
 
-    if (!email || !password) {
-      return res.status(400).json({
-        success: false,
-        message: 'Email and password are required'
-      });
-    }
+    const clientId = req.headers['x-client-id'] as string;
+    const userAgent = req.get('User-Agent');
+    const ip = req.ip;
 
-    const result = await authService.login(email, password);
+    // Log login attempt
+    logger.info('Login attempt', {
+      email: validatedData.email,
+      ip,
+      userAgent,
+      clientId,
+      timestamp: new Date().toISOString()
+    });
 
-    res.json({
+    const result = await authService.login(validatedData.email, validatedData.password);
+
+    // Log successful login
+    securityLogger.loginAttempt(validatedData.email, true, ip, userAgent || 'unknown');
+
+    return res.json({
       success: true,
       message: 'Login successful',
       data: {
@@ -118,16 +139,30 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
           userType: result.user.userType,
           isVerified: result.user.isVerified,
           emailVerified: result.user.emailVerified,
-          twoFactorEnabled: result.user.settings.twoFactorEnabled
+          twoFactorEnabled: result.user.settings?.twoFactorEnabled || false
         },
         tokens: result.tokens
       }
     });
   } catch (error) {
     logger.error('Login error:', error);
-    res.status(401).json({
+    
+    // Log failed login attempt
+    const email = req.body.email;
+    const ip = req.ip;
+    const userAgent = req.get('User-Agent');
+    if (email) {
+      securityLogger.loginAttempt(email, false, ip, userAgent || 'unknown');
+    }
+    
+    // Don't expose internal error details in production
+    const message = process.env.NODE_ENV === 'production' 
+      ? 'Invalid email or password'
+      : error instanceof Error ? error.message : 'Login failed';
+    
+    return res.status(400).json({
       success: false,
-      message: error instanceof Error ? error.message : 'Login failed'
+      message
     });
   }
 });
@@ -157,7 +192,7 @@ router.post('/verify-2fa', authLimiter, async (req: Request, res: Response) => {
 
     const tokens = await authService.verifyTwoFactor(payload.userId, code);
 
-    res.json({
+    return res.json({
       success: true,
       message: '2FA verification successful',
       data: {
@@ -166,7 +201,7 @@ router.post('/verify-2fa', authLimiter, async (req: Request, res: Response) => {
     });
   } catch (error) {
     logger.error('2FA verification error:', error);
-    res.status(400).json({
+    return res.status(400).json({
       success: false,
       message: error instanceof Error ? error.message : '2FA verification failed'
     });
@@ -187,7 +222,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
 
     const tokens = await authService.refreshToken(refreshToken);
 
-    res.json({
+    return res.json({
       success: true,
       message: 'Token refreshed successfully',
       data: {
@@ -196,7 +231,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
     });
   } catch (error) {
     logger.error('Token refresh error:', error);
-    res.status(401).json({
+    return res.status(401).json({
       success: false,
       message: error instanceof Error ? error.message : 'Token refresh failed'
     });
@@ -204,7 +239,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
 });
 
 // Logout user
-router.post('/logout', async (req: Request, res: Response) => {
+router.post('/logout', authenticateToken, async (req: Request, res: Response) => {
   try {
     const { accessToken, refreshToken } = req.body;
 
@@ -217,13 +252,13 @@ router.post('/logout', async (req: Request, res: Response) => {
 
     await authService.logout(accessToken, refreshToken);
 
-    res.json({
+    return res.json({
       success: true,
       message: 'Logout successful'
     });
   } catch (error) {
     logger.error('Logout error:', error);
-    res.status(400).json({
+    return res.status(400).json({
       success: false,
       message: error instanceof Error ? error.message : 'Logout failed'
     });
@@ -244,13 +279,13 @@ router.post('/verify-email', async (req: Request, res: Response) => {
 
     await authService.verifyEmail(token);
 
-    res.json({
+    return res.json({
       success: true,
       message: 'Email verified successfully'
     });
   } catch (error) {
     logger.error('Email verification error:', error);
-    res.status(400).json({
+    return res.status(400).json({
       success: false,
       message: error instanceof Error ? error.message : 'Email verification failed'
     });
@@ -271,13 +306,13 @@ router.post('/resend-verification', authLimiter, async (req: Request, res: Respo
 
     await authService.resendVerificationEmail(email);
 
-    res.json({
+    return res.json({
       success: true,
       message: 'Verification email sent successfully'
     });
   } catch (error) {
     logger.error('Resend verification error:', error);
-    res.status(400).json({
+    return res.status(400).json({
       success: false,
       message: error instanceof Error ? error.message : 'Failed to resend verification email'
     });
@@ -298,14 +333,15 @@ router.post('/forgot-password', authLimiter, async (req: Request, res: Response)
 
     await authService.forgotPassword(email);
 
-    res.json({
+    // Don't reveal if user exists
+    return res.json({
       success: true,
-      message: 'Password reset email sent successfully'
+      message: 'If an account with that email exists, a password reset email has been sent'
     });
   } catch (error) {
     logger.error('Forgot password error:', error);
     // Don't reveal if user exists
-    res.json({
+    return res.json({
       success: true,
       message: 'If an account with that email exists, a password reset email has been sent'
     });
@@ -326,36 +362,24 @@ router.post('/reset-password', authLimiter, async (req: Request, res: Response) 
 
     await authService.resetPassword(token, newPassword);
 
-    res.json({
+    return res.json({
       success: true,
       message: 'Password reset successfully'
     });
   } catch (error) {
     logger.error('Password reset error:', error);
-    res.status(400).json({
+    return res.status(400).json({
       success: false,
       message: error instanceof Error ? error.message : 'Password reset failed'
     });
   }
 });
 
-// Get current user
-router.get('/me', async (req: Request, res: Response) => {
+// Get current user (protected route)
+router.get('/me', authenticateToken, async (req: Request, res: Response) => {
   try {
-    const authHeader = req.headers.authorization;
-
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({
-        success: false,
-        message: 'Access token required'
-      });
-    }
-
-    const accessToken = authHeader.split(' ')[1];
-    const payload = await authService.verifyAccessToken(accessToken);
-
-    // Get user data
-    const user = await authService.getUserById(payload.userId);
+    // User is already authenticated by middleware
+    const user = await authService.getUserById((req as any).user.id);
 
     if (!user) {
       return res.status(404).json({
@@ -364,7 +388,7 @@ router.get('/me', async (req: Request, res: Response) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       data: {
         user: {
@@ -376,52 +400,26 @@ router.get('/me', async (req: Request, res: Response) => {
           userType: user.userType,
           isVerified: user.isVerified,
           emailVerified: user.emailVerified,
-          phoneVerified: user.phoneVerified,
-          walletAddress: user.walletAddress,
-          reputationScore: user.reputationScore,
-          totalEarnings: user.totalEarnings,
-          completedJobs: user.completedJobs,
-          averageRating: user.averageRating,
-          reviewCount: user.reviewCount,
-          skills: user.skills,
-          categories: user.categories,
-          hourlyRate: user.hourlyRate,
-          availability: user.availability,
-          lastActive: user.lastActive,
-          preferences: user.preferences,
-          settings: user.settings,
-          createdAt: user.createdAt
+          twoFactorEnabled: user.settings?.twoFactorEnabled || false
         }
       }
     });
   } catch (error) {
     logger.error('Get user error:', error);
-    res.status(401).json({
+    return res.status(401).json({
       success: false,
       message: error instanceof Error ? error.message : 'Authentication failed'
     });
   }
 });
 
-// Update user profile
-router.put('/profile', async (req: Request, res: Response) => {
+// Update user profile (protected route)
+router.put('/profile', authenticateToken, userRateLimit(10, 5 * 60 * 1000), async (req: Request, res: Response) => {
   try {
-    const authHeader = req.headers.authorization;
-
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({
-        success: false,
-        message: 'Access token required'
-      });
-    }
-
-    const accessToken = authHeader.split(' ')[1];
-    const payload = await authService.verifyAccessToken(accessToken);
-
     const updateData = req.body;
-    const updatedUser = await authService.updateUserProfile(payload.userId, updateData);
+    const updatedUser = await authService.updateUserProfile((req as any).user.id, updateData);
 
-    res.json({
+    return res.json({
       success: true,
       message: 'Profile updated successfully',
       data: {
@@ -430,28 +428,16 @@ router.put('/profile', async (req: Request, res: Response) => {
     });
   } catch (error) {
     logger.error('Profile update error:', error);
-    res.status(400).json({
+    return res.status(400).json({
       success: false,
       message: error instanceof Error ? error.message : 'Profile update failed'
     });
   }
 });
 
-// Change password
-router.put('/change-password', authLimiter, async (req: Request, res: Response) => {
+// Change password (protected route)
+router.put('/change-password', authenticateToken, userRateLimit(5, 15 * 60 * 1000), async (req: Request, res: Response) => {
   try {
-    const authHeader = req.headers.authorization;
-
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({
-        success: false,
-        message: 'Access token required'
-      });
-    }
-
-    const accessToken = authHeader.split(' ')[1];
-    const payload = await authService.verifyAccessToken(accessToken);
-
     const { currentPassword, newPassword } = req.body;
 
     if (!currentPassword || !newPassword) {
@@ -461,36 +447,27 @@ router.put('/change-password', authLimiter, async (req: Request, res: Response) 
       });
     }
 
-    await authService.changePassword(payload.userId, currentPassword, newPassword);
+    await authService.changePassword((req as any).user.id, currentPassword, newPassword);
 
-    res.json({
+    // Log password change
+    securityLogger.passwordChange((req as any).user.id, req.ip);
+
+    return res.json({
       success: true,
       message: 'Password changed successfully'
     });
   } catch (error) {
     logger.error('Password change error:', error);
-    res.status(400).json({
+    return res.status(400).json({
       success: false,
       message: error instanceof Error ? error.message : 'Password change failed'
     });
   }
 });
 
-// Enable/disable two-factor authentication
-router.put('/2fa', async (req: Request, res: Response) => {
+// Enable/disable two-factor authentication (protected route)
+router.put('/2fa', authenticateToken, userRateLimit(3, 15 * 60 * 1000), async (req: Request, res: Response) => {
   try {
-    const authHeader = req.headers.authorization;
-
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({
-        success: false,
-        message: 'Access token required'
-      });
-    }
-
-    const accessToken = authHeader.split(' ')[1];
-    const payload = await authService.verifyAccessToken(accessToken);
-
     const { enabled } = req.body;
 
     if (typeof enabled !== 'boolean') {
@@ -500,18 +477,39 @@ router.put('/2fa', async (req: Request, res: Response) => {
       });
     }
 
-    const result = await authService.toggleTwoFactor(payload.userId, enabled);
+    const result = await authService.toggleTwoFactor((req as any).user.id, enabled);
 
-    res.json({
+    return res.json({
       success: true,
       message: `Two-factor authentication ${enabled ? 'enabled' : 'disabled'} successfully`,
       data: result
     });
   } catch (error) {
     logger.error('2FA toggle error:', error);
-    res.status(400).json({
+    return res.status(400).json({
       success: false,
       message: error instanceof Error ? error.message : 'Failed to toggle 2FA'
+    });
+  }
+});
+
+// Admin-only route for user management
+router.get('/admin/users', authenticateToken, requireRole(['admin']), async (req: Request, res: Response) => {
+  try {
+    // This would typically fetch users with pagination
+    // For now, return a placeholder
+    return res.json({
+      success: true,
+      message: 'Admin access granted',
+      data: {
+        users: []
+      }
+    });
+  } catch (error) {
+    logger.error('Admin users error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch users'
     });
   }
 });

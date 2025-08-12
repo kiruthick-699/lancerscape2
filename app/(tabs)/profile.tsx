@@ -1,25 +1,37 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, SafeAreaView, StyleSheet, Switch } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, SafeAreaView, StyleSheet, Switch, Alert } from 'react-native';
 import { User, Settings, Moon, Sun, LogOut, Shield, Bell, HelpCircle, Star } from 'lucide-react-native';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useAuth } from '@/contexts/AuthContext';
 import TopNavBar from '@/components/TopNavBar';
 import NFTBadge from '@/components/NFTBadge';
 import { mockNFTBadge } from '@/data/mockData';
 
 export default function ProfileScreen() {
   const { colors, isDarkMode, toggleTheme } = useTheme();
+  const { user, logout } = useAuth();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [emailNotifications, setEmailNotifications] = useState(true);
 
-  const userProfile = {
-    name: 'Alex Johnson',
-    email: 'alex.johnson@example.com',
-    avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=150&h=150',
-    joinDate: 'March 2024',
-    totalEarnings: 12500,
-    completedJobs: 15,
-    rating: 4.8,
-    reviews: 23,
+  const handleLogout = async () => {
+    Alert.alert(
+      'Logout',
+      'Are you sure you want to logout?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Logout',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await logout();
+            } catch (error) {
+              Alert.alert('Error', 'Failed to logout. Please try again.');
+            }
+          }
+        }
+      ]
+    );
   };
 
   const settingsItems = [
@@ -70,10 +82,14 @@ export default function ProfileScreen() {
           </View>
           
           <View style={styles.profileInfo}>
-            <Text style={[styles.name, { color: colors.text }]}>{userProfile.name}</Text>
-            <Text style={[styles.email, { color: colors.textSecondary }]}>{userProfile.email}</Text>
+            <Text style={[styles.name, { color: colors.text }]}>
+              {user ? `${user.firstName} ${user.lastName}` : 'User'}
+            </Text>
+            <Text style={[styles.email, { color: colors.textSecondary }]}>
+              {user?.email || 'user@example.com'}
+            </Text>
             <Text style={[styles.joinDate, { color: colors.textSecondary }]}>
-              Member since {userProfile.joinDate}
+              {user?.userType === 'freelancer' ? 'Freelancer' : 'Client'} • Member since {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
             </Text>
           </View>
         </View>
@@ -82,14 +98,14 @@ export default function ProfileScreen() {
         <View style={styles.statsContainer}>
           <View style={[styles.statCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={[styles.statValue, { color: colors.text }]}>
-              ${userProfile.totalEarnings.toLocaleString()}
+              ${user?.totalEarnings ? user.totalEarnings.toLocaleString() : '0'}
             </Text>
             <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Total Earnings</Text>
           </View>
           
           <View style={[styles.statCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={[styles.statValue, { color: colors.text }]}>
-              {userProfile.completedJobs}
+              {user?.completedJobs || 0}
             </Text>
             <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Completed Jobs</Text>
           </View>
@@ -98,11 +114,11 @@ export default function ProfileScreen() {
             <View style={styles.ratingContainer}>
               <Star size={16} color={colors.warning} fill={colors.warning} />
               <Text style={[styles.statValue, { color: colors.text }]}>
-                {userProfile.rating}
+                {user?.averageRating ? user.averageRating.toFixed(1) : '0.0'}
               </Text>
             </View>
             <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
-              {userProfile.reviews} reviews
+              {user?.reviewCount || 0} reviews
             </Text>
           </View>
         </View>
@@ -161,7 +177,7 @@ export default function ProfileScreen() {
         </View>
 
         {/* Logout Button */}
-        <TouchableOpacity style={[styles.logoutButton, { backgroundColor: colors.error }]}>
+        <TouchableOpacity style={[styles.logoutButton, { backgroundColor: colors.error }]} onPress={handleLogout}>
           <LogOut size={20} color="#fff" />
           <Text style={styles.logoutText}>Log Out</Text>
         </TouchableOpacity>

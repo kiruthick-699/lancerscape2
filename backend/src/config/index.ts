@@ -2,6 +2,38 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+// Environment validation
+const validateEnvironment = () => {
+  const required = [
+    'JWT_SECRET',
+    'SESSION_SECRET',
+    'DB_HOST',
+    'DB_PASSWORD',
+    'REDIS_HOST'
+  ];
+  
+  const missing = required.filter(key => !process.env[key]);
+  
+  if (missing.length > 0) {
+    throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
+  }
+  
+  // Validate JWT secret strength
+  if (process.env.JWT_SECRET && process.env.JWT_SECRET.length < 32) {
+    throw new Error('JWT_SECRET must be at least 32 characters long');
+  }
+  
+  // Validate session secret strength
+  if (process.env.SESSION_SECRET && process.env.SESSION_SECRET.length < 32) {
+    throw new Error('SESSION_SECRET must be at least 32 characters long');
+  }
+};
+
+// Validate environment on import
+if (process.env.NODE_ENV === 'production') {
+  validateEnvironment();
+}
+
 interface Config {
   // Server
   port: number;
@@ -126,11 +158,11 @@ const config: Config = {
     port: parseInt(process.env.DB_PORT || '5432', 10),
     name: process.env.DB_NAME || 'lancerscape2',
     username: process.env.DB_USERNAME || 'postgres',
-    password: process.env.DB_PASSWORD || 'password',
+    password: process.env.DB_PASSWORD || '',
     ssl: process.env.DB_SSL === 'true',
     pool: {
       min: parseInt(process.env.DB_POOL_MIN || '2', 10),
-      max: parseInt(process.env.DB_POOL_MAX || '10', 10),
+      max: parseInt(process.env.DB_POOL_MAX || '20', 10), // Increased for production
     },
   },
   
@@ -144,8 +176,8 @@ const config: Config = {
   
   // JWT
   jwt: {
-    secret: process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production',
-    expiresIn: process.env.JWT_EXPIRES_IN || '24h',
+    secret: process.env.JWT_SECRET || '',
+    expiresIn: process.env.JWT_EXPIRES_IN || '15m', // Reduced for security
     refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
   },
   
@@ -214,7 +246,7 @@ const config: Config = {
     bcryptRounds: parseInt(process.env.BCRYPT_ROUNDS || '12', 10),
     rateLimitWindow: parseInt(process.env.RATE_LIMIT_WINDOW || '900000', 10), // 15 minutes
     rateLimitMax: parseInt(process.env.RATE_LIMIT_MAX || '100', 10),
-    sessionSecret: process.env.SESSION_SECRET || 'your-super-secret-session-key-change-in-production',
+    sessionSecret: process.env.SESSION_SECRET || '',
   },
   
   // Monitoring
