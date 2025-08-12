@@ -1,26 +1,23 @@
 import { config as baseConfig } from './index';
 
-// Production-specific configuration overrides
 export const productionConfig = {
   ...baseConfig,
   
-  // Enhanced security for production
   security: {
     ...baseConfig.security,
-    bcryptRounds: 14, // Increased from 12 for production
-    rateLimitMax: 50, // Reduced from 100 for production
-    rateLimitWindow: 15 * 60 * 1000, // 15 minutes
-    sessionTimeout: 30 * 60 * 1000, // 30 minutes
+    bcryptRounds: 14,
+    rateLimitMax: 50,
+    rateLimitWindow: 15 * 60 * 1000,
+    sessionTimeout: 30 * 60 * 1000,
     maxLoginAttempts: 5,
-    lockoutDuration: 15 * 60 * 1000, // 15 minutes
+    lockoutDuration: 15 * 60 * 1000,
     passwordMinLength: 12,
     requireMFA: true,
   },
   
-  // Enhanced monitoring for production
   monitoring: {
     ...baseConfig.monitoring,
-    logLevel: 'warn', // Reduced logging in production
+    logLevel: 'warn',
     enableMetrics: true,
     enableTracing: true,
     enableHealthChecks: true,
@@ -30,12 +27,11 @@ export const productionConfig = {
     datadogApiKey: process.env.DATADOG_API_KEY,
   },
   
-  // Enhanced database configuration for production
   database: {
     ...baseConfig.database,
     pool: {
-      min: 5, // Increased minimum connections
-      max: 50, // Increased maximum connections
+      min: 5,
+      max: 50,
       acquireTimeoutMillis: 30000,
       createTimeoutMillis: 30000,
       destroyTimeoutMillis: 5000,
@@ -43,7 +39,7 @@ export const productionConfig = {
       reapIntervalMillis: 1000,
       createRetryIntervalMillis: 200,
     },
-    ssl: true, // Require SSL in production
+    ssl: true,
     sslOptions: {
       rejectUnauthorized: true,
       ca: process.env.DB_SSL_CA,
@@ -52,10 +48,9 @@ export const productionConfig = {
     },
   },
   
-  // Enhanced Redis configuration for production
   redis: {
     ...baseConfig.redis,
-    password: process.env.REDIS_PASSWORD, // Require password in production
+    password: process.env.REDIS_PASSWORD,
     tls: process.env.REDIS_TLS === 'true' ? {} : undefined,
     retryDelayOnFailover: 100,
     maxRetriesPerRequest: 3,
@@ -63,26 +58,23 @@ export const productionConfig = {
     maxLoadingTimeout: 10000,
   },
   
-  // Enhanced JWT configuration for production
   jwt: {
     ...baseConfig.jwt,
-    expiresIn: '10m', // Reduced from 15m for security
+    expiresIn: '10m',
     refreshExpiresIn: '7d',
     issuer: 'lancerscape2-production',
     audience: 'lancerscape2-users-production',
   },
   
-  // Enhanced CORS for production
   corsOrigins: process.env.CORS_ORIGINS?.split(',') || [
     'https://lancerscape2.com',
     'https://www.lancerscape2.com',
     'https://app.lancerscape2.com'
   ],
   
-  // Enhanced file upload limits for production
   upload: {
     ...baseConfig.upload,
-    maxSize: 5 * 1024 * 1024, // Reduced to 5MB for production
+    maxSize: 5 * 1024 * 1024,
     allowedTypes: [
       'image/jpeg',
       'image/png',
@@ -95,7 +87,6 @@ export const productionConfig = {
     enableCompression: true,
   },
   
-  // Enhanced payment configuration for production
   payment: {
     ...baseConfig.payment,
     stripe: {
@@ -105,26 +96,24 @@ export const productionConfig = {
     },
     paypal: {
       ...baseConfig.payment.paypal,
-      mode: 'live', // Production mode
+      mode: 'live',
       webhookId: process.env.PAYPAL_WEBHOOK_ID,
     },
   },
   
-  // Enhanced blockchain configuration for production
   blockchain: {
     ...baseConfig.blockchain,
     rpcUrl: process.env.BLOCKCHAIN_RPC_URL || 'https://mainnet.infura.io/v3/your-project-id',
-    chainId: 1, // Ethereum mainnet
+    chainId: 1,
     gasLimit: 300000,
     gasPrice: 'auto',
-    confirmations: 12, // Increased confirmations for production
+    confirmations: 12,
     enableMonitoring: true,
   },
   
-  // Enhanced email configuration for production
   email: {
     ...baseConfig.email,
-    secure: true, // Require TLS in production
+    secure: true,
     requireTLS: true,
     maxRetries: 3,
     retryDelay: 1000,
@@ -132,7 +121,6 @@ export const productionConfig = {
     enableBounceHandling: true,
   },
   
-  // Enhanced SMS configuration for production
   sms: {
     ...baseConfig.sms,
     enableDeliveryReceipts: true,
@@ -141,7 +129,6 @@ export const productionConfig = {
     retryDelay: 1000,
   },
   
-  // Enhanced logging for production
   logging: {
     level: 'warn',
     format: 'json',
@@ -158,17 +145,15 @@ export const productionConfig = {
     },
   },
   
-  // Enhanced caching for production
   caching: {
     enableRedis: true,
     enableMemoryCache: true,
-    defaultTTL: 300, // 5 minutes
+    defaultTTL: 300,
     maxMemoryUsage: '512mb',
     enableCompression: true,
     enableStats: true,
   },
   
-  // Enhanced rate limiting for production
   rateLimiting: {
     enableRedis: true,
     enableIPWhitelist: true,
@@ -178,7 +163,6 @@ export const productionConfig = {
     blockedCountries: process.env.BLOCKED_COUNTRIES?.split(',') || [],
   },
   
-  // Enhanced security headers for production
   securityHeaders: {
     enableHSTS: true,
     enableCSP: true,
@@ -189,17 +173,15 @@ export const productionConfig = {
     enableContentTypeOptions: true,
   },
   
-  // Enhanced backup configuration for production
   backup: {
     enableAutomatedBackups: true,
     backupFrequency: 'daily',
-    backupRetention: 30, // days
+    backupRetention: 30,
     backupCompression: true,
     backupEncryption: true,
     backupVerification: true,
   },
   
-  // Enhanced disaster recovery for production
   disasterRecovery: {
     enableMultiRegion: true,
     enableFailover: true,
@@ -209,7 +191,6 @@ export const productionConfig = {
     recoveryPointObjective: '1h',
   },
   
-  // Enhanced performance monitoring for production
   performance: {
     enableProfiling: true,
     enableMetrics: true,
@@ -217,42 +198,39 @@ export const productionConfig = {
     enableLoadTesting: true,
     enableStressTesting: true,
     performanceThresholds: {
-      maxResponseTime: 2000, // 2 seconds
+      maxResponseTime: 2000,
       maxMemoryUsage: '1gb',
-      maxCPUUsage: 80, // percentage
-      maxDatabaseQueryTime: 1000, // 1 second
+      maxCPUUsage: 80,
+      maxDatabaseQueryTime: 1000,
     },
   },
   
-  // Enhanced alerting for production
   alerting: {
     enableAlerts: true,
     alertChannels: ['email', 'slack', 'pagerduty'],
     alertThresholds: {
-      errorRate: 5, // percentage
-      responseTime: 5000, // 5 seconds
+      errorRate: 5,
+      responseTime: 5000,
       memoryUsage: '80%',
       cpuUsage: '90%',
       diskUsage: '85%',
     },
     enableEscalation: true,
-    escalationDelay: 15 * 60 * 1000, // 15 minutes
+    escalationDelay: 15 * 60 * 1000,
   },
   
-  // Enhanced compliance for production
   compliance: {
     enableGDPR: true,
     enableCCPA: true,
     enableSOC2: true,
-    enableHIPAA: false, // Set based on requirements
+    enableHIPAA: false,
     enablePCI: true,
     enableAuditLogging: true,
     enableDataRetention: true,
-    dataRetentionPeriod: 7 * 365 * 24 * 60 * 60 * 1000, // 7 years
+    dataRetentionPeriod: 7 * 365 * 24 * 60 * 60 * 1000,
   },
 };
 
-// Environment validation for production
 export const validateProductionEnvironment = () => {
   const required = [
     'JWT_SECRET',
@@ -277,31 +255,25 @@ export const validateProductionEnvironment = () => {
     throw new Error(`Missing required production environment variables: ${missing.join(', ')}`);
   }
   
-  // Validate JWT secret strength
   if (process.env.JWT_SECRET && process.env.JWT_SECRET.length < 64) {
-    throw new Error('JWT_SECRET must be at least 64 characters long in production');
+    throw new Error('JWT_SECRET must be at least 64 characters long');
   }
   
-  // Validate session secret strength
   if (process.env.SESSION_SECRET && process.env.SESSION_SECRET.length < 64) {
-    throw new Error('SESSION_SECRET must be at least 64 characters long in production');
+    throw new Error('SESSION_SECRET must be at least 64 characters long');
   }
   
-  // Validate database SSL
   if (process.env.DB_SSL !== 'true') {
     throw new Error('Database SSL is required in production');
   }
   
-  // Validate Redis TLS
   if (process.env.REDIS_TLS !== 'true') {
     throw new Error('Redis TLS is required in production');
   }
   
-  // Validate HTTPS
   if (process.env.NODE_ENV === 'production' && process.env.FORCE_HTTPS !== 'true') {
     throw new Error('HTTPS is required in production');
   }
 };
 
-// Export production config
 export default productionConfig;
