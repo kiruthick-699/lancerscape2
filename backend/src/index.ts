@@ -5,7 +5,9 @@ import compression from 'compression';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
 import slowDown from 'express-slow-down';
+// @ts-ignore - Missing type definitions
 import xss from 'xss-clean';
+// @ts-ignore - Missing type definitions
 import hpp from 'hpp';
 import dotenv from 'dotenv';
 import { createServer } from 'http';
@@ -46,7 +48,7 @@ const io = new Server(server, {
   pingInterval: 25000,
   maxHttpBufferSize: 1e6,
   allowRequest: (req, callback) => {
-    const clientId = req.headers['x-client-id'] || req.ip;
+    const clientId = req.headers['x-client-id'] || (req as any).ip || req.connection?.remoteAddress || 'unknown';
     callback(null, true);
   }
 });
@@ -74,7 +76,19 @@ app.use(helmet({
 }));
 
 app.use(cors({
-  origin: config.corsOrigins,
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (config.corsOrigins.includes(origin)) return callback(null, true);
+    // Allow subdomains of the configured frontend URL
+    try {
+      const allowed = new URL(config.frontendUrl).hostname;
+      const requestHost = new URL(origin).hostname;
+      if (allowed === requestHost || requestHost.endsWith(`.${allowed}`)) {
+        return callback(null, true);
+      }
+    } catch {}
+    callback(new Error('Not allowed by CORS'));
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Client-ID'],
@@ -92,7 +106,7 @@ const limiter = rateLimit({
     return req.path === '/health';
   },
   keyGenerator: (req) => {
-    return req.headers['x-client-id'] as string || req.ip;
+    return req.headers['x-client-id'] as string || (req as any).ip || req.connection?.remoteAddress || 'unknown';
   }
 });
 
@@ -207,7 +221,7 @@ app.get('/metrics', (req, res) => {
     environment: config.nodeEnv
   };
   
-  res.json(metrics);
+  return res.json(metrics);
 });
 
 app.get('/', (req, res) => {

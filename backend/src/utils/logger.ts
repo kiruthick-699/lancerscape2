@@ -34,6 +34,7 @@ const logger = winston.createLogger({
   },
   transports: [
     // Error logs with rotation
+    // @ts-ignore - DailyRotateFile type issue
     new winston.transports.DailyRotateFile({
       filename: 'logs/error-%DATE%.log',
       datePattern: 'YYYY-MM-DD',
@@ -45,6 +46,7 @@ const logger = winston.createLogger({
     }),
     
     // Combined logs with rotation
+    // @ts-ignore - DailyRotateFile type issue
     new winston.transports.DailyRotateFile({
       filename: 'logs/combined-%DATE%.log',
       datePattern: 'YYYY-MM-DD',
@@ -55,6 +57,7 @@ const logger = winston.createLogger({
     }),
     
     // Performance logs
+    // @ts-ignore - DailyRotateFile type issue
     new winston.transports.DailyRotateFile({
       filename: 'logs/performance-%DATE%.log',
       datePattern: 'YYYY-MM-DD',
@@ -68,6 +71,7 @@ const logger = winston.createLogger({
   
   // Handle uncaught exceptions
   exceptionHandlers: [
+    // @ts-ignore - DailyRotateFile type issue
     new winston.transports.DailyRotateFile({
       filename: 'logs/exceptions-%DATE%.log',
       datePattern: 'YYYY-MM-DD',
@@ -80,6 +84,7 @@ const logger = winston.createLogger({
   
   // Handle unhandled promise rejections
   rejectionHandlers: [
+    // @ts-ignore - DailyRotateFile type issue
     new winston.transports.DailyRotateFile({
       filename: 'logs/rejections-%DATE%.log',
       datePattern: 'YYYY-MM-DD',

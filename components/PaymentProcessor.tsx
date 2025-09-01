@@ -27,8 +27,8 @@ export default function PaymentProcessor({
   onClose,
   escrowId,
   amount,
-  freelancerAddress,
-  jobTitle,
+  freelancerAddress = '',
+  jobTitle = 'Untitled Job',
 }: PaymentProcessorProps) {
   const { colors } = useTheme();
   const { isConnected, walletAddress } = useWallet();
@@ -126,7 +126,7 @@ export default function PaymentProcessor({
               {amount} ETH
             </Text>
             <Text style={[styles.freelancer, { color: colors.textSecondary }]}>
-              To: {freelancerAddress.slice(0, 6)}...{freelancerAddress.slice(-4)}
+              To: {freelancerAddress ? `${freelancerAddress.slice(0, 6)}...${freelancerAddress.slice(-4)}` : 'Unknown Address'}
             </Text>
           </View>
 

@@ -328,7 +328,9 @@ export const defaultSecurityConfig: SecurityConfig = {
   minJobDuration: 60 * 60, // 1 hour in seconds
   rateLimitWindow: 15 * 60 * 1000, // 15 minutes
   rateLimitMax: 100, // 100 requests per window
-  allowedOrigins: ['http://localhost:3000', 'https://lancerscape2.com']
+  allowedOrigins: (process.env.EXPO_PUBLIC_ALLOWED_ORIGINS || 'http://localhost:3000')
+    .split(',')
+    .map(o => o.trim())
 };
 
 // Export singleton instance

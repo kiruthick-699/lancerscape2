@@ -123,10 +123,10 @@ export default function RegisterScreen() {
         <View style={styles.container}>
           {/* Header */}
           <View style={styles.header}>
-            <Text style={[styles.title, { color: colors.text }]}>
+            <Text style={[styles.title, { color: '#1E3A8A' }]}>
               Create Account
             </Text>
-            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+            <Text style={[styles.subtitle, { color: '#1F2937' }]}>
               Join Lancerscape2 and start your freelancing journey
             </Text>
           </View>

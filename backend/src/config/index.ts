@@ -149,7 +149,13 @@ const config: Config = {
   // Server
   port: parseInt(process.env.PORT || '3000', 10),
   nodeEnv: process.env.NODE_ENV || 'development',
-  corsOrigins: process.env.CORS_ORIGINS?.split(',') || ['http://localhost:3000', 'http://localhost:8081'],
+  corsOrigins: (process.env.CORS_ORIGINS || '')
+    .split(',')
+    .map(o => o.trim())
+    .filter(o => o.length > 0)
+    .filter((value, index, self) => self.indexOf(value) === index)
+    .filter(o => /^(https?:)?\/\//.test(o))
+    .concat(!(process.env.CORS_ORIGINS) ? ['http://localhost:3000', 'http://localhost:8081', 'http://localhost:19006'] : []),
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
   
   // Database

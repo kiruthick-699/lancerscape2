@@ -16,11 +16,15 @@ export default function AuthWrapper({ children }: AuthWrapperProps) {
   useEffect(() => {
     if (!isLoading) {
       if (!isAuthenticated) {
-        // Redirect to login if not authenticated
-        router.replace('/login');
+        // Only redirect to login if we're not already there
+        if (router.pathname !== '/login' && router.pathname !== '/register') {
+          router.replace('/login');
+        }
       } else {
-        // Redirect to main app if authenticated
-        router.replace('/(tabs)');
+        // Only redirect to main app if we're not already there
+        if (router.pathname === '/login' || router.pathname === '/register') {
+          router.replace('/(tabs)');
+        }
       }
     }
   }, [isAuthenticated, isLoading, router]);
